@@ -1,0 +1,77 @@
+CCEffect %{
+  techniques:
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert # builtin header
+      frag: unlit-fs:frag
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+      properties: 
+        scaleWorldV:         { value: 7 }   # 扩展板子横向
+        scaleWorldF:         { value: 7 }   # 扩展板子横向
+}%
+
+CCProgram unlit-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+  #include <legacy/input-standard>
+
+  out vec4 msPosScaled;
+
+  uniform ConstantV {
+    float scaleWorldV;
+  };
+
+  vec4 vert () {
+    // StandardVertInput In;
+    // CCVertInput(In);
+
+    // mat4 matWorld, matWorldIT;
+    // CCGetWorldMatrixFull(matWorld, matWorldIT);
+    // msPosScaled = In.position;
+    // msPosScaled.x *= scaleWorld;
+    // // vec4 csPosScaled = cc_matProj * (cc_matView * matWorld) * msPosScaled;
+    // vec4 csPosScaled = cc_matProj * (cc_matView * matWorld) * In.position;
+
+    // return csPosScaled;
+
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+
+    vec4 pos = matWorld * In.position;
+    msPosScaled = In.position;
+    msPosScaled.x *= scaleWorldV;
+
+    return cc_matProj * (cc_matView * matWorld) * msPosScaled;
+  }
+}%
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+  #include <builtin/internal/alpha-test>
+
+
+  in vec4 msPosScaled;
+  uniform Constant {
+    float scaleWorldF;
+  };  
+
+  vec4 frag () {
+    float roundRadius = 0.3;
+    vec2 center = vec2(scaleWorldF * 0.5 - roundRadius, 0.5 - roundRadius);
+    vec2 msQuadPos = vec2(max(abs(msPosScaled.x) - center.x, 0.0), max((abs(msPosScaled.y) - center.y), 0.0));
+    float dis = msQuadPos.x * msQuadPos.x + msQuadPos.y * msQuadPos.y;
+    float rq = roundRadius * roundRadius;
+    if (dis > rq)
+      discard;
+
+    return CCFragOutput(vec4(0.3,0.3,0.3,1));
+  }
+}%
