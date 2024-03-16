@@ -33,7 +33,7 @@ CCProgram sprite-vs %{
   in vec4 a_color;
 
   out vec4 color;
-  out vec2 uv0;
+  out vec2 uv;
 
   vec4 vert () {
     vec4 pos = vec4(a_position, 1);
@@ -50,16 +50,16 @@ CCProgram sprite-vs %{
       pos = cc_matViewProj * pos;
     #endif
 
-    uv0 = a_texCoord;
+    uv = vec2(a_texCoord.x, 1.0 - a_texCoord.y);
     #if SAMPLE_FROM_RT
-      CC_HANDLE_RT_SAMPLE_FLIP(uv0);
+      CC_HANDLE_RT_SAMPLE_FLIP(uv);
     #endif
     color = a_color;
 
     return pos;
   }
 }%
-
+ 
 CCProgram sprite-fs %{
   precision highp float;
   #include <builtin/internal/embedded-alpha>
@@ -68,21 +68,16 @@ CCProgram sprite-fs %{
   in vec4 color;
 
   #if USE_TEXTURE
-    in vec2 uv0;
+    in vec2 uv;
     #pragma builtin(local)
     layout(set = 2, binding = 12) uniform sampler2D cc_spriteTexture;
   #endif
 
   vec4 frag () {
-    vec4 o = vec4(1, 1, 1, 1);
-
-    #if USE_TEXTURE
-      o *= CCSampleWithAlphaSeparated(cc_spriteTexture, uv0);
-      #if IS_GRAY
-        float gray  = 0.2126 * o.r + 0.7152 * o.g + 0.0722 * o.b;
-        o.r = o.g = o.b = gray;
-      #endif
-    #endif
+    vec4 o = vec4(0, 0, 0, 1);
+    // 
+    if((uv.x >= 0.001 && uv.x <= 0.401) && uv.y <= 0.601 && uv.y >= 0.201)
+        o = vec4(1,1,1,1);
 
     o *= color;
     ALPHA_TEST(o);
