@@ -5,9 +5,11 @@ const SERVER_HOST = 'http://localhost:5000/';
 const INITIALIZE_OVERVIEW = 'initialize_overview';
 type DataPoint = {
     pos: Vec2;
-    img: Texture2D;
     value: number;
     idx: number;    // 映射到原数组中的序号
+    type: number;
+    name: string;
+    img: Texture2D;
 };
 
 type rectSize = {
@@ -23,6 +25,30 @@ enum SelectingType {
     Range = 2,
     Multi = 3
 }
+
+const type2Color = [
+    'ff0000',
+    '00ff00',
+    '0000ff',
+    'ffff00',
+    'ff00ff',
+    '00ffff',
+    'f0f000',
+    'f000f0',
+    '00f0f0',
+    '88f088',
+    'f08888',
+    '8888f0',
+    'bcaf6e',
+    'cdfcae',
+    '7ac6ed',
+    '34acds',
+    '9fe4a5',
+    'ba4390',
+    '7384fa',
+    '1188ee',
+    'ee8811',
+]
 
 @ccclass('test')
 export class test extends Component {
@@ -40,8 +66,9 @@ export class test extends Component {
     public SelectNode: Prefab = null;
 
 
-    private data: Vec3[] = [];
-    private pointTree: DataPoint[][][] = [  ];
+    private data: DataPoint[] = [];
+    private typeDict: Map<string, number> = new Map();
+    private pointTree: DataPoint[][][] = [];
     private canvasSize: Vec2 = new Vec2(0);
     private scatterGraph: Graphics;
     private selectGraph: Graphics;
@@ -50,6 +77,7 @@ export class test extends Component {
     private scatterHeight: number;
     private isShow: boolean = true;
     private selectNodeList: Node[] = [];
+    private selectDataList: DataPoint[] = []
     private quadPanelPos: rectSize;
 
     // 交互数据
@@ -78,41 +106,28 @@ export class test extends Component {
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
 
-
-        let xhr = new XMLHttpRequest();
-        let url = SERVER_HOST + INITIALIZE_OVERVIEW;
-
-        xhr.open('GET', url, true);
-        xhr.onreadystatechange = function () { // 当请求被发送到服务器时，我们需要执行一些动作  
-            if (xhr.readyState === 4 && xhr.status === 200) { // 如果请求已完成，且响应状态码为200（即成功），则...  
-                let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
-                console.log(response); // 在控制台打印响应数据  
-            }  
-        };  
-
-        console.log('try to get flask backend');
-        xhr.send();
-        console.log('send end');
-
         // test code
-        for (let i = 0; i < 1000; i++) {
-            this.data.push(new Vec3(randomRange(-10, 10), randomRange(-10, 10), randomRange(-10, 10)));
-        }
+        // for (let i = 0; i < 1000; i++) {
+        //     this.data.push(new Vec3(randomRange(-10, 10), randomRange(-10, 10), randomRange(-10, 10)));
+        // }
 
-        if (this.data.length > 0) {
-            this.scatterRange = {
-                left: this.data[0].x, 
-                right: this.data[0].x, 
-                bottom: this.data[0].y, 
-                top: this.data[0].y
-            };
-        }
-        this.data.forEach(value => {
-            this.scatterRange.left = Math.min(this.scatterRange.left, value.x);
-            this.scatterRange.right = Math.max(this.scatterRange.right, value.x);
-            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.y);
-            this.scatterRange.top = Math.max(this.scatterRange.top, value.y);
-        })
+        // if (this.data.length > 0) {
+        //     this.scatterRange = {
+        //         left: this.data[0].x, 
+        //         right: this.data[0].x, 
+        //         bottom: this.data[0].y, 
+        //         top: this.data[0].y
+        //     };
+        // }
+        // this.data.forEach(value => {
+        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.x);
+        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.x);
+        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.y);
+        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.y);
+        // })
+
+        // this.drawAxis();
+        // this.drawScatter();
 
         this.scatterGraph = this.ScatterGraphic.getComponent(Graphics);
         this.selectGraph = this.SelectGraphic.getComponent(Graphics);
@@ -120,8 +135,6 @@ export class test extends Component {
         console.log(this.selectGraph);
         this.selectGraph.lineWidth = 2;
         this.selectGraph.strokeColor.fromHEX('ee0000');
-        this.drawAxis();
-        this.drawScatter();
     }
 
     onEnable () {
@@ -232,18 +245,20 @@ export class test extends Component {
 
         for (let i = 0; i < this.data.length; i++) {
             const d = this.data[i];
-            const point: DataPoint = {
-                pos: new Vec2((d.x - this.scatterRange.left) * 600 / this.scatterWidth, (d.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
-                img: null,
-                value: d.z,
-                idx: i
-            };
+            d.pos = new Vec2((d.pos.x - this.scatterRange.left) * 600 / this.scatterWidth, 
+                (d.pos.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
+            // const point: DataPoint = {
+            //     pos: new Vec2((d.x - this.scatterRange.left) * 600 / this.scatterWidth, (d.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
+            //     img: null,
+            //     value: d.z,
+            //     idx: i
+            // };
 
-            this.pointTree[Math.min(Math.floor(point.pos.x / 60), 9)][Math.min(Math.floor(point.pos.y / 60), 9)].push(point);
+            this.pointTree[Math.min(Math.floor(d.pos.x / 60), 9)][Math.min(Math.floor(d.pos.y / 60), 9)].push(d);
             // console.log(point.pos.x * 600 - 620, point.pos.y - 300);
             
-            this.scatterGraph.fillColor.fromHEX('#9999dd');
-            this.scatterGraph.circle(point.pos.x - 620, point.pos.y - 300, 2);
+            this.scatterGraph.fillColor.fromHEX(type2Color[d.type]);
+            this.scatterGraph.circle(d.pos.x - 620, d.pos.y - 300, 2);
             this.scatterGraph.fill();
             this.scatterGraph.stroke();
         }
@@ -306,7 +321,7 @@ export class test extends Component {
                 while (!this.isSelectCtrl && this.selectNodeList.length > 0) {
                     this.selectNodeList[this.selectNodeList.length - 1].destroy();
                     this.selectNodeList.pop();
-
+                    this.selectDataList.pop();
                 } 
             }
         }
@@ -347,10 +362,11 @@ export class test extends Component {
                         bottom: Math.floor(selectRange.bottom / 60),
                         top: Math.min(Math.floor(selectRange.top / 60), 9),
                     }
-                    while (this.selectNodeList.length > 0) {
-                        this.selectNodeList[this.selectNodeList.length - 1].destroy();
-                        this.selectNodeList.pop();
-                    } 
+                    // while (this.selectNodeList.length > 0) {
+                    //     this.selectNodeList[this.selectNodeList.length - 1].destroy();
+                    //     this.selectNodeList.pop();
+
+                    // } 
                     for (let x = selectZone.left; x <= selectZone.right; x++) {
                         for (let y = selectZone.bottom; y <= selectZone.top; y++) {
                             if (x == selectZone.left || x == selectZone.right || y == selectZone.bottom || y == selectZone.top) {
@@ -362,6 +378,7 @@ export class test extends Component {
                                         this.UICanvas.getChildByName('BackUI').addChild(selectNode);
                                         selectNode.setPosition(new Vec3(pointPos.x - 620, pointPos.y - 300, 0));
                                         this.selectNodeList.push(selectNode);
+                                        this.selectDataList.push(pointList[i]);
                                     }
                                 }
                             } else {
@@ -371,6 +388,7 @@ export class test extends Component {
                                     this.UICanvas.getChildByName('BackUI').addChild(selectNode);
                                     selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
                                     this.selectNodeList.push(selectNode);
+                                    this.selectDataList.push(pointList[i]);
                                     
                                 }
                             }
@@ -392,6 +410,7 @@ export class test extends Component {
                             this.UICanvas.getChildByName('BackUI').addChild(selectNode);
                             selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
                             this.selectNodeList.push(selectNode);
+                            this.selectDataList.push(pointList[i]);
                             console.log('shot on node!' + pointList[i].pos);
                             console.log(pos);
                             console.log(this.UICanvas.getChildByName('BackUI').children);
@@ -420,6 +439,60 @@ export class test extends Component {
         this.isMove = false;
         this.isSelect = false;
         this.selectGraph.clear();
+    }
+
+    // button触发事件
+    public onInitializeClick() {    
+        let xhr = new XMLHttpRequest();
+        let url = SERVER_HOST + INITIALIZE_OVERVIEW;
+        
+        xhr.open('GET', url, true);
+        xhr.onreadystatechange = () => { // 当请求被发送到服务器时，我们需要执行一些动作  
+            if (xhr.readyState === 4 && xhr.status === 200) { // 如果请求已完成，且响应状态码为200（即成功），则...  
+                let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
+                console.log(response); // 在控制台打印响应数据  
+                let i = 0;
+                this.scatterRange = {
+                    left: 0, 
+                    right: 0, 
+                    bottom: 0, 
+                    top: 0
+                };
+                response.forEach(d => {
+                    const typeStr = d[0].split(' ')[0];
+                    console.log(typeStr);
+                    if (!this.typeDict.has(typeStr)) {
+                        this.typeDict.set(typeStr, this.typeDict.size);
+                        console.log(this.typeDict.get(typeStr));
+                    }
+
+                    const newDataPoint: DataPoint = {
+                        pos: new Vec2(d[1][0][0], d[1][0][1]),
+                        value: 0,           // 待定
+                        idx: i,
+                        type: this.typeDict.get(typeStr),
+                        name: d[0],
+                        img: null
+                    }
+                    
+                    this.scatterRange.left = Math.min(this.scatterRange.left, newDataPoint.pos.x);
+                    this.scatterRange.right = Math.max(this.scatterRange.right, newDataPoint.pos.x);
+                    this.scatterRange.bottom = Math.min(this.scatterRange.bottom, newDataPoint.pos.y);
+                    this.scatterRange.top = Math.max(this.scatterRange.top, newDataPoint.pos.y);
+                    
+                    this.data.push(newDataPoint);
+                    i++;
+                });
+                this.scatterGraph.clear();
+                this.drawAxis();
+                this.drawScatter();
+                
+            }  
+        };  
+
+        console.log('try to get flask backend');
+        xhr.send();
+        console.log('send end');
     }
 }
 
