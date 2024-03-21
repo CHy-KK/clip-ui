@@ -4,9 +4,12 @@ CCEffect %{
     passes:
     - vert: unlit-vs:vert # builtin header
       frag: unlit-fs:frag
+      rasterizerState:
+        cullMode: back
       depthStencilState:
         depthTest: true
         depthWrite: true
+        stencilTestFront: true
       properties: 
         scaleWorldV:         { value: 7 }   # 扩展板子横向
         scaleWorldF:         { value: 7 }   # 扩展板子横向
@@ -26,18 +29,6 @@ CCProgram unlit-vs %{
   };
 
   vec4 vert () {
-    // StandardVertInput In;
-    // CCVertInput(In);
-
-    // mat4 matWorld, matWorldIT;
-    // CCGetWorldMatrixFull(matWorld, matWorldIT);
-    // msPosScaled = In.position;
-    // msPosScaled.x *= scaleWorld;
-    // // vec4 csPosScaled = cc_matProj * (cc_matView * matWorld) * msPosScaled;
-    // vec4 csPosScaled = cc_matProj * (cc_matView * matWorld) * In.position;
-
-    // return csPosScaled;
-
     StandardVertInput In;
     CCVertInput(In);
 

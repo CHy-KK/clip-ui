@@ -1,0 +1,63 @@
+// Copyright (c) 2017-2020 Xiamen Yaji Software Co., Ltd.
+CCEffect %{
+  techniques:
+  - passes:
+    - vert: sprite-vs:vert
+      frag: sprite-fs:frag
+      depthStencilState:
+        depthTest: false
+        depthWrite: false
+        stencilTest: true
+      blendState:
+        targets:
+        - blend: true
+          blendSrc: src_alpha
+          blendDst: one_minus_src_alpha
+          blendDstAlpha: one_minus_src_alpha
+      rasterizerState:
+        cullMode: none
+}%
+
+CCProgram sprite-vs %{
+  precision highp float;
+  #include <builtin/uniforms/cc-global>
+  #if USE_LOCAL
+    #include <builtin/uniforms/cc-local>
+  #endif
+  #if SAMPLE_FROM_RT
+    #include <common/common-define>
+  #endif
+  in vec3 a_position;
+
+
+
+  vec4 vert () {
+    vec4 pos = vec4(a_position, 1);
+
+    #if USE_LOCAL
+      pos = cc_matWorld * pos;
+    #endif
+
+    #if USE_PIXEL_ALIGNMENT
+      pos = cc_matView * pos;
+      pos.xyz = floor(pos.xyz);
+      pos = cc_matProj * pos;
+    #else
+      pos = cc_matViewProj * pos;
+    #endif
+
+
+    return pos;
+  }
+}%
+
+CCProgram sprite-fs %{
+  precision highp float;
+  #include <builtin/internal/embedded-alpha>
+  #include <builtin/internal/alpha-test>
+
+  vec4 frag () {
+   
+    return vec4(0,0,0,0.1);
+  }
+}%

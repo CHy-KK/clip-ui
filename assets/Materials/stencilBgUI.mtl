@@ -5,21 +5,19 @@
   "__editorExtras__": {},
   "_native": "",
   "_effectAsset": {
-    "__uuid__": "7812c01f-1bf8-48b1-9888-c367aa81d7ae",
+    "__uuid__": "8aed63b8-5a55-497b-8a01-c8703d6a5367",
     "__expectedType__": "cc.EffectAsset"
   },
   "_techIdx": 0,
   "_defines": [
-    {
-      "USE_ALPHA_TEST": true
-    }
+    {}
   ],
   "_states": [
     {
-      "priority": 127,
       "rasterizerState": {},
       "depthStencilState": {
-        "stencilPassOpFront": 2
+        "stencilPassOpFront": 2,
+        "stencilPassOpBack": 2
       },
       "blendState": {
         "targets": [

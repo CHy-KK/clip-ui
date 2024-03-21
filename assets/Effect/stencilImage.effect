@@ -1,0 +1,52 @@
+CCEffect %{
+  techniques:
+  - name: transparent
+    passes:
+    - vert: unlit-vs:vert # builtin header
+      frag: unlit-fs:frag
+      rasterizerState:
+        cullMode: back
+      depthStencilState:
+        depthTest: true
+        depthWrite: true
+        stencilTestFront: true
+        # stencilWriteMaskFront: 1
+      properties: 
+        mainTexture:    { value: white }
+
+}%
+
+CCProgram unlit-vs %{
+  precision highp float;
+  #include <legacy/input-standard>
+  #include <builtin/uniforms/cc-global>
+  #include <legacy/local-batch>
+  #include <legacy/input-standard>
+
+  out vec2 v_uv;
+
+  vec4 vert () {
+    StandardVertInput In;
+    CCVertInput(In);
+
+    mat4 matWorld, matWorldIT;
+    CCGetWorldMatrixFull(matWorld, matWorldIT);
+    v_uv = a_texCoord;
+
+    return cc_matProj * (cc_matView * matWorld) * In.position;
+  }
+}%
+
+CCProgram unlit-fs %{
+  precision highp float;
+  #include <legacy/output>
+  #include <builtin/internal/alpha-test>
+
+  in vec2 v_uv;
+
+  uniform sampler2D mainTexture;
+
+  vec4 frag () {
+    return CCFragOutput(texture(mainTexture, v_uv));
+  }
+}%

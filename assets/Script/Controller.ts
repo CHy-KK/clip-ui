@@ -1,8 +1,12 @@
 import { _decorator, Component, EventKeyboard, EventTouch, Graphics, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { PREVIEW } from 'cc/env';
+import { VoxelHistoryQueue } from './Utils/Queue';
 const { ccclass, property } = _decorator;
 
-const SERVER_HOST = 'http://localhost:5000/';
-const INITIALIZE_OVERVIEW = 'initialize_overview';
+const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
+const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
+const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel'
+
 type DataPoint = {
     pos: Vec2;
     value: number;
@@ -19,9 +23,20 @@ type rectSize = {
     top: number
 };
 
+type VoxelBuffer = {
+    Select: Node[],
+    History: Node[],    // TODO: 看下用体素直接丢在这里性能咋样，如果不行这里还是用一个RT放
+    Edit: Node[]
+};
+
+enum RequestName {
+    InitializeOverview = '/initialize_overview',
+    GetVoxel = '/get_voxel',
+}
+
 enum SelectingType {
     None = 0,
-    One = 1,
+    Single = 1,
     Range = 2,
     Multi = 3
 }
@@ -50,8 +65,13 @@ const type2Color = [
     'ee8811',
 ]
 
-@ccclass('test')
-export class test extends Component {
+
+const voxelScaleSelect: number = 0.05;
+const voxelScaleHistory: number = 0.01;
+const voxelScaleEdit: number = 0.1;
+
+@ccclass('MainController')
+export class MainController extends Component {
 
     @property(Node)
     public ScatterGraphic: Node = null;
@@ -60,10 +80,31 @@ export class test extends Component {
     public SelectGraphic: Node = null;
 
     @property(Node)
+    public HistoryBgGraphic: Node = null;
+
+    @property(Node)
+    public HistoryBgMask: Node = null;
+
+    @property(Node)
     public UICanvas: Node = null;
 
     @property(Prefab)
     public SelectNode: Prefab = null;
+
+    @property(Node)
+    public SelectSingleButtons: Node = null;
+
+    @property(Node)
+    public SelectMultiButtons: Node = null;
+
+    @property(Node)
+    public SelectRangeButtons: Node = null;
+
+    @property(Prefab)
+    public VoxelCube: Prefab = null;
+
+    @property(Node)
+    public VoxelNodeSelect: Node = null;
 
 
     private data: DataPoint[] = [];
@@ -72,21 +113,33 @@ export class test extends Component {
     private canvasSize: Vec2 = new Vec2(0);
     private scatterGraph: Graphics;
     private selectGraph: Graphics;
+    private historyBgGraph: Graphics;
+    private historyMaskGraph: Graphics;
     private scatterRange: rectSize; // x-min, x-max, y-min, y-max
     private scatterWidth: number;
     private scatterHeight: number;
     private isShow: boolean = true;
     private selectNodeList: Node[] = [];
-    private selectDataList: DataPoint[] = []
+    private selectDataList: number[] = []
     private quadPanelPos: rectSize;
+    private voxelList: VoxelBuffer = {
+        Select: [],
+        History: [],
+        Edit: []
+    }
+    private isGetVoxelFinished: boolean = false;
+    private VoxelDataHistory: VoxelHistoryQueue = new VoxelHistoryQueue(10);
+    private historyMaxLength: number = 10;
 
     // 交互数据
+    private isInitialize: boolean = false;
     private selectPos: Vec2 = new Vec2(0);
     private selectMovingPos: Vec2 =  new Vec2(0);
     private isMove: boolean = false;
     private isSelect: boolean = false;
     private isSelectCtrl: boolean = false;
     private selectType: SelectingType = SelectingType.None;
+
     
     // private isSelectingOne: boolean = false;
     // private isSelectingRange: boolean = false;
@@ -96,7 +149,7 @@ export class test extends Component {
         // Initialize
         this.canvasSize.x = this.UICanvas.getComponent(UITransform).contentSize.x;
         this.canvasSize.y = this.UICanvas.getComponent(UITransform).contentSize.y;
-        const quadPanel = this.UICanvas.getChildByName('BackUI').getChildByName('quadPanel');
+        const quadPanel = this.UICanvas.getChildByName('InnerUI').getChildByName('quadPanel');
         this.quadPanelPos = {
             right: this.canvasSize.x - quadPanel.getComponent(Widget).right,
             top: this.canvasSize.y - quadPanel.getComponent(Widget).top,
@@ -131,10 +184,39 @@ export class test extends Component {
 
         this.scatterGraph = this.ScatterGraphic.getComponent(Graphics);
         this.selectGraph = this.SelectGraphic.getComponent(Graphics);
-        console.log(this.scatterGraph);
-        console.log(this.selectGraph);
+        this.historyBgGraph = this.HistoryBgGraphic.getComponent(Graphics);
+
+        this.historyBgGraph.fillColor.fromHEX('656565');
+        this.historyBgGraph.moveTo(150, 210);
+        this.historyBgGraph.lineTo(1130, 210);
+        this.historyBgGraph.lineTo(1180, 160);
+        this.historyBgGraph.lineTo(1180, 110);
+        this.historyBgGraph.lineTo(1130, 60);
+        this.historyBgGraph.lineTo(150, 60);
+        this.historyBgGraph.lineTo(100, 110);
+        this.historyBgGraph.lineTo(100, 160);
+        this.historyBgGraph.lineTo(150, 210);
+        this.historyBgGraph.arc(1130, 160, 50, this.angle2radian(90), this.angle2radian(0), false);
+        this.historyBgGraph.arc(1130, 110, 50, this.angle2radian(0), this.angle2radian(-90), false);
+        this.historyBgGraph.arc(150, 110, 50, this.angle2radian(-90), this.angle2radian(-180), false);
+        this.historyBgGraph.arc(150, 160, 50, this.angle2radian(-180), this.angle2radian(-270), false);
+        this.historyBgGraph.fill();
+
         this.selectGraph.lineWidth = 2;
         this.selectGraph.strokeColor.fromHEX('ee0000');
+
+        // 对每个体素列表预生成32 * 32 * 32个cube
+        for (let i = 32 * 32 * 32; i >= 0; i--) {
+            const sv = this.createVoxel(voxelScaleSelect);
+            this.voxelList.Select.push(sv);
+            this.VoxelNodeSelect.addChild(sv);
+            
+            const hv = this.createVoxel(voxelScaleHistory);
+            this.voxelList.History.push(hv);
+
+            const ev = this.createVoxel(voxelScaleEdit);
+            this.voxelList.Edit.push(ev);
+        }
     }
 
     onEnable () {
@@ -156,7 +238,7 @@ export class test extends Component {
     }
 
     update(deltaTime: number) {
-        if (this.isSelect && this.isMove && !this.isSelectCtrl) {
+        if (this.isInitialize && this.isSelect && this.isMove && !this.isSelectCtrl) {
             this.selectGraph.clear();
             // selectMovingPos没有做-20 -60校正处理
             this.selectGraph.moveTo(this.selectPos.x + 20, this.selectPos.y + 60);
@@ -168,10 +250,14 @@ export class test extends Component {
         }
     }
 
+    private angle2radian(angle: number): number {
+        return angle * Math.PI * 0.005555556;   // angle * pi / 180(0.005555556 = 1 / 179.999985600)
+    }
+
     private drawAxis() {
         // 原点(-320, 0)
         // scattergraph的ui坐标被放在了屏幕中心，后面放到左下角可以统一0-1280/0-720坐标
-        this.scatterGraph.lineWidth = 3;
+        this.scatterGraph.lineWidth = 2;
         this.scatterGraph.strokeColor.fromHEX('#eeeeee');
         // x-axis
         this.scatterGraph.moveTo(-620, 0);
@@ -191,11 +277,11 @@ export class test extends Component {
         const scaleLabel = new Node();
         const sl = scaleLabel.addComponent(Label);
         this.ScatterGraphic.addChild(scaleLabel);
-        sl.string = '0';
+        sl.string = `(${((this.scatterRange.left + this.scatterRange.right) * 0.5).toFixed(1)}, ${((this.scatterRange.top + this.scatterRange.bottom) * 0.5).toFixed(1)})`;
         sl.fontSize = 10;
         sl.lineHeight = sl.fontSize;
         sl.color.fromHEX('#eeeeee');
-        scaleLabel.setPosition(new Vec3(-330, -10, 0));
+        scaleLabel.setPosition(new Vec3(-320, -10, 0));
         scaleLabel.layer = this.ScatterGraphic.layer;
 
         const scaleLabelListX = [-560, -500, -440, -380, -260, -200, -140, -80];
@@ -222,7 +308,7 @@ export class test extends Component {
             slx.color.fromHEX('#eeeeee');
             sly.color.fromHEX('#eeeeee');
             scaleLabelX.setPosition(new Vec3(scaleLabelListX[i], -10, 0));
-            scaleLabelY.setPosition(new Vec3(-335, scaleLabelListY[i], 0));
+            scaleLabelY.setPosition(new Vec3(-340, scaleLabelListY[i], 0));
             scaleLabelX.layer = this.ScatterGraphic.layer;
             scaleLabelY.layer = this.ScatterGraphic.layer;
         }
@@ -264,17 +350,54 @@ export class test extends Component {
         }
     }
 
+    // TODO:设置体素的颜色等
+    private createVoxel(scale: number): Node {
+        const vc = instantiate(this.VoxelCube);
+        vc.scale.multiplyScalar(scale);
+        vc.active = false;
+        return vc;
+    }
 
+    private renderVoxelSelect(id: string) {
+        let i = 0;
+        const voxelData: Vec3[] = this.VoxelDataHistory.getEleById(id);
+        console.log('in render====================');
+        console.log(voxelData);
+        for (; i < voxelData.length; i++) {
+            if (i >= this.voxelList.Select.length) {
+                const sv = this.createVoxel(voxelScaleSelect);
+                this.VoxelNodeSelect.addChild(sv);
+                this.voxelList.Select.push(sv);
+            }
+            const sv = this.voxelList.Select[i];
+            sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScaleSelect);
+            sv.active = true;
+        }
+
+        while (i < this.voxelList.Select.length && this.voxelList.Select[i].active) {
+            this.voxelList.Select[i++].active = false;
+        }
+            
+    }
+
+    private snapShotVoxel = (event, id) => {
+        console.log('snap shot for voxel ' + id);
+
+
+
+        this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
+    }
 
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
-            const op = this.UICanvas.getChildByName('BackUI').getComponent(UIOpacity);
+            const op = this.UICanvas.getChildByName('InnerUI').getComponent(UIOpacity);
             this.isShow = !this.isShow;
             op.opacity = this.isShow ? 255 : 0;
         } else if (this.isShow) {
-            console.log('is one? ' + this.selectType);
-            if (key.keyCode === KeyCode.CTRL_LEFT && !this.isSelect && this.selectType != SelectingType.One && this.selectType != SelectingType.Range) {
+            if (PREVIEW)
+                console.log('is one? ' + this.selectType);
+            if (key.keyCode === KeyCode.CTRL_LEFT && !this.isSelect && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
                 // 按住左ctrl多次选点
                 this.isSelectCtrl = true;
             }
@@ -314,9 +437,12 @@ export class test extends Component {
                 // if (!this.isSelectCtrl) {
                 //     this.isSelectingMulti = false;
                 // }
-                if (this.selectType != SelectingType.Multi || !this.isSelectCtrl) 
+                if (this.selectType != SelectingType.Multi || !this.isSelectCtrl) {
                     this.selectType = SelectingType.None;
-                
+                    this.SelectMultiButtons.active = false;
+                    this.SelectRangeButtons.active = false;
+                    this.SelectSingleButtons.active = false;
+                }
                 // 这里也把数据点清空
                 while (!this.isSelectCtrl && this.selectNodeList.length > 0) {
                     this.selectNodeList[this.selectNodeList.length - 1].destroy();
@@ -331,7 +457,8 @@ export class test extends Component {
     private onTouchMove(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isShow) {              // ui交互事件
-            console.log('moving');
+            if (PREVIEW)
+                console.log('moving');
             this.isMove = true;
             if (this.isSelect) {
                 this.selectMovingPos = pos;
@@ -342,7 +469,8 @@ export class test extends Component {
     }
 
     private onTouchEnd(e: EventTouch) {
-        console.log(this.isSelectCtrl);
+        if (PREVIEW)
+            console.log(this.isSelectCtrl);
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isShow) {
             if (this.isSelect) {
@@ -375,28 +503,34 @@ export class test extends Component {
                                     const pointPos = pointList[i].pos;
                                     if (pointPos.x >= selectRange.left && pointPos.x <= selectRange.right && pointPos.y >= selectRange.bottom && pointPos.y <= selectRange.top) {
                                         const selectNode = instantiate(this.SelectNode);
-                                        this.UICanvas.getChildByName('BackUI').addChild(selectNode);
+                                        this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
                                         selectNode.setPosition(new Vec3(pointPos.x - 620, pointPos.y - 300, 0));
                                         this.selectNodeList.push(selectNode);
-                                        this.selectDataList.push(pointList[i]);
+                                        this.selectDataList.push(pointList[i].idx);
                                     }
                                 }
                             } else {
                                 const pointList = this.pointTree[x][y];
                                 for (let i = 0; i < pointList.length; i++) {
                                     const selectNode = instantiate(this.SelectNode);
-                                    this.UICanvas.getChildByName('BackUI').addChild(selectNode);
+                                    this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
                                     selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
                                     this.selectNodeList.push(selectNode);
-                                    this.selectDataList.push(pointList[i]);
+                                    this.selectDataList.push(pointList[i].idx);
                                     
                                 }
                             }
                         }
                     }
                     if (this.selectNodeList.length > 0) {
-                        this.selectType = SelectingType.Range;
-                        // TODO: 展示范围选择的button
+                        if (this.selectNodeList.length === 1) {
+                            this.selectType = SelectingType.Single;
+                            this.SelectSingleButtons.active = true;
+                        }
+                        else {
+                            this.selectType = SelectingType.Range;
+                            this.SelectRangeButtons.active = true;
+                        }
                     }
                 } else {
                     const tileX = Math.floor((pos.x - 20) / 60);
@@ -407,23 +541,27 @@ export class test extends Component {
                         if (this.distanceVec2(pos, pointList[i].pos) < 3) {
                            
                             const selectNode = instantiate(this.SelectNode);
-                            this.UICanvas.getChildByName('BackUI').addChild(selectNode);
+                            this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
                             selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
                             this.selectNodeList.push(selectNode);
-                            this.selectDataList.push(pointList[i]);
-                            console.log('shot on node!' + pointList[i].pos);
-                            console.log(pos);
-                            console.log(this.UICanvas.getChildByName('BackUI').children);
+                            this.selectDataList.push(pointList[i].idx);
+                            
+                            if (PREVIEW) {
+                                console.log('shot on node!' + pointList[i].pos);
+                                console.log(pos);
+                                console.log(this.UICanvas.getChildByName('InnerUI').children);
+                            }
                             break;
                         }
                     }
                     if (this.selectNodeList.length > 0) {
-                        if (!this.isSelectCtrl) {
-                            this.selectType = SelectingType.One;
-                            // TODO: 展示单选的button
+                        if (!this.isSelectCtrl || this.selectNodeList.length === 1) {
+                            this.selectType = SelectingType.Single;
+                            this.SelectSingleButtons.active = true;
+                            console.log(this.data[this.selectDataList[0]]);
                         } else {
                             this.selectType = SelectingType.Multi;
-                            // TODO: 展示多选的button
+                            this.SelectMultiButtons.active = true;      
                         }
                     }
                     // else
@@ -432,7 +570,11 @@ export class test extends Component {
 
                 let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / (this.quadPanelPos.right - this.quadPanelPos.left), 
                     (pos.y - this.quadPanelPos.bottom) / (this.quadPanelPos.top - this.quadPanelPos.bottom));
-                console.log('panel uv:' + uv);
+                uv.x = Math.max(0, Math.min(uv.x, 1));
+                uv.y = Math.max(0, Math.min(uv.y, 1));
+                
+                if (PREVIEW)
+                    console.log('panel uv:' + uv);
             }
         }
 
@@ -441,16 +583,19 @@ export class test extends Component {
         this.selectGraph.clear();
     }
 
-    // button触发事件
-    public onInitializeClick() {    
+    /*------------------------------------------- button触发事件 -------------------------------------------*/ 
+
+    public onInitializeButtonClick() {    
         let xhr = new XMLHttpRequest();
-        let url = SERVER_HOST + INITIALIZE_OVERVIEW;
+        let url = SERVER_HOST + RequestName.InitializeOverview;
         
         xhr.open('GET', url, true);
         xhr.onreadystatechange = () => { // 当请求被发送到服务器时，我们需要执行一些动作  
             if (xhr.readyState === 4 && xhr.status === 200) { // 如果请求已完成，且响应状态码为200（即成功），则...  
                 let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
-                console.log(response); // 在控制台打印响应数据  
+                
+                if (PREVIEW)
+                    console.log(response); // 在控制台打印响应数据  
                 let i = 0;
                 this.scatterRange = {
                     left: 0, 
@@ -460,10 +605,14 @@ export class test extends Component {
                 };
                 response.forEach(d => {
                     const typeStr = d[0].split(' ')[0];
-                    console.log(typeStr);
+                    
+                    if (PREVIEW)
+                        console.log(typeStr);
                     if (!this.typeDict.has(typeStr)) {
                         this.typeDict.set(typeStr, this.typeDict.size);
-                        console.log(this.typeDict.get(typeStr));
+                        
+                        if (PREVIEW)
+                            console.log(this.typeDict.get(typeStr));
                     }
 
                     const newDataPoint: DataPoint = {
@@ -489,11 +638,82 @@ export class test extends Component {
                 
             }  
         };  
-
-        console.log('try to get flask backend');
+        
+        console.log(url);
         xhr.send();
+        
         console.log('send end');
     }
+
+    private async waitUntilGetVoxelFnish() {
+        return new Promise((resolve, reject) => {
+            // 这里需要一个信号量以及一个事件来作等待，如果GET_VOXEL_FINISH_EVENT事件触发先于该函数执行，说明isGetVoxelFinished已经被置1，则返回；如果事件触发晚于该函数，则可通过监听触发事件返回；
+            // 但如果promise中操作不是原子的话，依然存在一个情况导致阻塞，即：
+            // waitUntilGetVoxelFnish先判断isGetVoxelFinished，
+            // 然后onreadystatechange函数执行置1并触发GET_VOXEL_FINISH_EVENT，
+            // 然后waitUntilGetVoxelFnish开始监听GET_VOXEL_FINISH_EVENT
+            if (this.isGetVoxelFinished) {
+                this.isGetVoxelFinished = false;
+                resolve(null);
+                return;
+            }
+            this.node.on(GET_VOXEL_FINISH_EVENT, () => {
+                this.isGetVoxelFinished = false;
+                resolve(null);
+                this.node.off(GET_VOXEL_FINISH_EVENT);
+            }, this);
+        });
+    }
+
+    // id用来唯一标识这个体素
+    // 调用此接口时思考一下id查重的问题
+    private getVoxel(id: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
+        let xhr = new XMLHttpRequest();
+
+        let url = SERVER_HOST + RequestName.GetVoxel + `/${idx0}-${idx1}-${idx2}-${idx3}/${xval}${xval == 0 ? '.0' : ''}-${yval}${yval == 0 ? '.0' : ''}`;
+        
+        xhr.open('GET', url, true);
+        xhr.onreadystatechange = () => { 
+            if (xhr.readyState === 4 && xhr.status === 200) { 
+                const rawVoxelData = JSON.parse(xhr.responseText);
+                let voxelData: Vec3[] = [];
+                
+                if (PREVIEW) 
+                    console.log(rawVoxelData); 
+
+                for (let x = 0; x < 64; x++) {
+                    for (let y = 0; y < 64; y++) {
+                        for (let z = 0; z < 64; z++) {
+                            if (rawVoxelData[z][y][x]) {
+                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                            }
+                        }
+                    }
+                }
+
+                if (!this.VoxelDataHistory.push(voxelData, id)) {   // 如果队列满了则pop掉队首
+                    this.VoxelDataHistory.popHead();
+                    this.VoxelDataHistory.push(voxelData, id);
+                }   
+                
+                this.isGetVoxelFinished = true;
+                this.node.emit(GET_VOXEL_FINISH_EVENT);
+            }  
+        };  
+
+        console.log(url);
+        xhr.send();
+    }
+
+    public async onSingleGetVoxelButtonClick() {
+        const id = this.selectDataList[0].toString();
+        if (this.VoxelDataHistory.isExist(id) === -1) {
+            this.getVoxel(id, this.selectDataList[0]);
+            await this.waitUntilGetVoxelFnish();
+            console.log('get voxel finished');
+            // this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this, id);
+        }
+        this.renderVoxelSelect(id);
+    }
+
 }
-
-
