@@ -1,9 +1,9 @@
-import { _decorator, Component, EventKeyboard, EventTouch, Graphics, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Component, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 import { PREVIEW } from 'cc/env';
-import { VoxelHistoryQueue } from './Utils/Queue';
+import { Queue, VoxelHistoryQueue } from './Utils/Queue';
 const { ccclass, property } = _decorator;
 
-const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
+const SERVER_HOST = 'http://127.0.0.1:5000';    // 注意这里端口可能被占用
 const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
 const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel'
 
@@ -106,6 +106,15 @@ export class MainController extends Component {
     @property(Node)
     public VoxelNodeSelect: Node = null;
 
+    @property(RenderTexture)
+    public selectRT: RenderTexture = null;
+
+    @property()
+    public historyMaxLength: number = 10;
+
+    @property(SpriteFrame)
+    public FUFUSF: SpriteFrame = null;
+
 
     private data: DataPoint[] = [];
     private typeDict: Map<string, number> = new Map();
@@ -128,8 +137,8 @@ export class MainController extends Component {
         Edit: []
     }
     private isGetVoxelFinished: boolean = false;
-    private VoxelDataHistory: VoxelHistoryQueue = new VoxelHistoryQueue(10);
-    private historyMaxLength: number = 10;
+    private VoxelDataHistory: VoxelHistoryQueue;
+    private historySFQueue: Queue<Node>;
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -139,8 +148,9 @@ export class MainController extends Component {
     private isSelect: boolean = false;
     private isSelectCtrl: boolean = false;
     private selectType: SelectingType = SelectingType.None;
+    private isSnapShotReady: number = 1;
+    private snapShotId: string = '';
 
-    
     // private isSelectingOne: boolean = false;
     // private isSelectingRange: boolean = false;
     // private isSelectingMulti: boolean = false;
@@ -159,6 +169,9 @@ export class MainController extends Component {
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
 
+        this.VoxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
+        this.historySFQueue = new Queue<Node>(this.historyMaxLength);
+        
         // test code
         // for (let i = 0; i < 1000; i++) {
         //     this.data.push(new Vec3(randomRange(-10, 10), randomRange(-10, 10), randomRange(-10, 10)));
@@ -248,6 +261,16 @@ export class MainController extends Component {
             this.selectGraph.lineTo(this.selectPos.x + 20, this.selectPos.y + 60);
             this.selectGraph.stroke();
         }
+
+        if (this.isSnapShotReady) {
+            console.log("this.snapShot===================");
+            if (this.isSnapShotReady === 1) {
+                this.isSnapShotReady++;
+            } else {
+                this.node.emit(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotId);
+                this.isSnapShotReady = 0;
+            }
+        }
     }
 
     private angle2radian(angle: number): number {
@@ -333,12 +356,7 @@ export class MainController extends Component {
             const d = this.data[i];
             d.pos = new Vec2((d.pos.x - this.scatterRange.left) * 600 / this.scatterWidth, 
                 (d.pos.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
-            // const point: DataPoint = {
-            //     pos: new Vec2((d.x - this.scatterRange.left) * 600 / this.scatterWidth, (d.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
-            //     img: null,
-            //     value: d.z,
-            //     idx: i
-            // };
+
 
             this.pointTree[Math.min(Math.floor(d.pos.x / 60), 9)][Math.min(Math.floor(d.pos.y / 60), 9)].push(d);
             // console.log(point.pos.x * 600 - 620, point.pos.y - 300);
@@ -377,14 +395,40 @@ export class MainController extends Component {
         while (i < this.voxelList.Select.length && this.voxelList.Select[i].active) {
             this.voxelList.Select[i++].active = false;
         }
-            
+
+        this.isSnapShotReady = 1;
+        this.snapShotId = id;
     }
 
     private snapShotVoxel = (event, id) => {
         console.log('snap shot for voxel ' + id);
 
-
-
+        const snapshot = new SpriteFrame();
+        const rtData = this.selectRT.readPixels();
+        const voxelTexture = new Texture2D();
+        voxelTexture.reset({ width: this.selectRT.width, height: this.selectRT.height, format: Texture2D.PixelFormat.RGBA8888, mipmapLevel: 0 })
+        voxelTexture.uploadData(rtData, 0, 0);
+        voxelTexture.updateImage();
+        console.log(voxelTexture.image);
+        snapshot.texture = voxelTexture;
+        
+        const spriteNode = new Node();
+        spriteNode.layer = this.HistoryBgMask.layer;
+        spriteNode.setScale(new Vec3(1, -1, 1));
+        const sp = spriteNode.addComponent(Sprite);
+        sp.spriteFrame = snapshot;
+        // sp.spriteFrame = this.FUFUSF;
+        this.HistoryBgMask.addChild(spriteNode);
+        spriteNode.getComponent(UITransform).contentSize.set(100, 100);
+        const childList = this.HistoryBgMask.children;
+        if (childList.length > this.historyMaxLength) 
+            this.HistoryBgMask.removeChild(childList[0]);
+        let xpos = 440;
+        for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
+            childList[i].position = new Vec3(xpos, 0, 0);
+        }
+        console.log('snapshot list');
+        console.log(childList);
         this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
     }
 
@@ -635,6 +679,7 @@ export class MainController extends Component {
                 this.scatterGraph.clear();
                 this.drawAxis();
                 this.drawScatter();
+                this.isInitialize = true;
                 
             }  
         };  
@@ -711,7 +756,7 @@ export class MainController extends Component {
             this.getVoxel(id, this.selectDataList[0]);
             await this.waitUntilGetVoxelFnish();
             console.log('get voxel finished');
-            // this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this, id);
+            this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
         this.renderVoxelSelect(id);
     }
