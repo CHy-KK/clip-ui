@@ -19,7 +19,7 @@ export class VoxelHistoryQueue {
         return -1;
     }
 
-    public getEleById(id: string): Vec3[] {
+    public getElementById(id: string): Vec3[] {
         const idx = this.isExist(id);
         if(idx == -1 && PREVIEW) {
             console.error('this id is not in queue now');

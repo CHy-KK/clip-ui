@@ -1,11 +1,14 @@
-import { _decorator, Component, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Button, Component, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 import { PREVIEW } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
+import { SnapShotNode } from './SnapShotNode';
+import { LockAsync } from './Utils/Lock';
 const { ccclass, property } = _decorator;
 
-const SERVER_HOST = 'http://127.0.0.1:5000';    // 注意这里端口可能被占用
+const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
 const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
-const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel'
+const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel';
+export const DRAW_EDIT_VOXEL_EVENT = 'draw-edit-voxel';
 
 type DataPoint = {
     pos: Vec2;
@@ -25,7 +28,6 @@ type rectSize = {
 
 type VoxelBuffer = {
     Select: Node[],
-    History: Node[],    // TODO: 看下用体素直接丢在这里性能咋样，如果不行这里还是用一个RT放
     Edit: Node[]
 };
 
@@ -65,10 +67,13 @@ const type2Color = [
     'ee8811',
 ]
 
-
-const voxelScaleSelect: number = 0.05;
-const voxelScaleHistory: number = 0.01;
-const voxelScaleEdit: number = 0.1;
+const voxelScale = {
+    Select: 0.05,
+    Edit: 0.1
+}
+// const voxelScale
+// const voxelScale
+// const voxelScale
 
 @ccclass('MainController')
 export class MainController extends Component {
@@ -103,8 +108,11 @@ export class MainController extends Component {
     @property(Prefab)
     public VoxelCube: Prefab = null;
 
-    @property(Node)
+    @property({ type: Node, tooltip: '挂载inner ui体素数据的节点' })
     public VoxelNodeSelect: Node = null;
+
+    @property({ type: Node, tooltip: '挂载世界空间可编辑体素数据的节点' })
+    public VoxelNodeEdit: Node = null;
 
     @property(RenderTexture)
     public selectRT: RenderTexture = null;
@@ -123,22 +131,19 @@ export class MainController extends Component {
     private scatterGraph: Graphics;
     private selectGraph: Graphics;
     private historyBgGraph: Graphics;
-    private historyMaskGraph: Graphics;
     private scatterRange: rectSize; // x-min, x-max, y-min, y-max
     private scatterWidth: number;
     private scatterHeight: number;
-    private isShow: boolean = true;
+    private isInnerUI: boolean = true;
     private selectNodeList: Node[] = [];
     private selectDataList: number[] = []
     private quadPanelPos: rectSize;
     private voxelList: VoxelBuffer = {
         Select: [],
-        History: [],
         Edit: []
     }
     private isGetVoxelFinished: boolean = false;
     private VoxelDataHistory: VoxelHistoryQueue;
-    private historySFQueue: Queue<Node>;
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -150,6 +155,8 @@ export class MainController extends Component {
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: number = 1;
     private snapShotId: string = '';
+    public drawEditVoxelIdBuffer: string = '';
+    private drawEditLock: LockAsync = new LockAsync();
 
     // private isSelectingOne: boolean = false;
     // private isSelectingRange: boolean = false;
@@ -170,7 +177,6 @@ export class MainController extends Component {
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
 
         this.VoxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
-        this.historySFQueue = new Queue<Node>(this.historyMaxLength);
         
         // test code
         // for (let i = 0; i < 1000; i++) {
@@ -220,15 +226,13 @@ export class MainController extends Component {
 
         // 对每个体素列表预生成32 * 32 * 32个cube
         for (let i = 32 * 32 * 32; i >= 0; i--) {
-            const sv = this.createVoxel(voxelScaleSelect);
+            const sv = this.createVoxel(voxelScale.Select);
             this.voxelList.Select.push(sv);
             this.VoxelNodeSelect.addChild(sv);
             
-            const hv = this.createVoxel(voxelScaleHistory);
-            this.voxelList.History.push(hv);
-
-            const ev = this.createVoxel(voxelScaleEdit);
+            const ev = this.createVoxel(voxelScale.Edit);
             this.voxelList.Edit.push(ev);
+            this.VoxelNodeEdit.addChild(ev);
         }
     }
 
@@ -239,6 +243,7 @@ export class MainController extends Component {
         input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
         input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);  
+        // this.node.on(DRAW_EDIT_VOXEL_EVENT, this.onDrawEditVoxel, this);
     }
 
     onDisable () {
@@ -248,6 +253,7 @@ export class MainController extends Component {
         input.off(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
         input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
+        // this.node.off(DRAW_EDIT_VOXEL_EVENT, this.onDrawEditVoxel, this);
     }
 
     update(deltaTime: number) {
@@ -377,15 +383,15 @@ export class MainController extends Component {
 
     private renderVoxelSelect(id: string) {
         let i = 0;
-        const voxelData: Vec3[] = this.VoxelDataHistory.getEleById(id);
+        const voxelData: Vec3[] = this.VoxelDataHistory.getElementById(id);
         for (; i < voxelData.length; i++) {
             if (i >= this.voxelList.Select.length) {
-                const sv = this.createVoxel(voxelScaleSelect);
+                const sv = this.createVoxel(voxelScale.Select);
                 this.VoxelNodeSelect.addChild(sv);
                 this.voxelList.Select.push(sv);
             }
             const sv = this.voxelList.Select[i];
-            sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScaleSelect);
+            sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Select);
             sv.active = true;
         }
 
@@ -408,6 +414,9 @@ export class MainController extends Component {
         snapshot.texture = voxelTexture;
         
         const spriteNode = new Node();
+        const ssn = spriteNode.addComponent(SnapShotNode);
+        ssn.vid = msg.id;
+        ssn.controller = this;
         spriteNode.layer = this.HistoryBgMask.layer;
         spriteNode.setScale(new Vec3(1, -1, 1));
 
@@ -421,12 +430,16 @@ export class MainController extends Component {
         spriteNode.addChild(idLabel);
         idLabel.setPosition(new Vec3(0, 70, 0));
         idLabel.setScale(new Vec3(1, -1, 1));
+
         
         this.HistoryBgMask.addChild(spriteNode);
         spriteNode.getComponent(UITransform).contentSize.set(100, 100);
         const childList = this.HistoryBgMask.children;
-        if (childList.length > this.historyMaxLength) 
+        if (childList.length > this.historyMaxLength) {
+            const chtail = childList[0];
             this.HistoryBgMask.removeChild(childList[0]);
+            chtail.destroy();
+        }
         let xpos = 0;   
         for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
             childList[i].position = new Vec3(xpos, 15, 0);
@@ -442,13 +455,17 @@ export class MainController extends Component {
         return this.VoxelDataHistory.length();
     }
 
+    public isOutUI() {
+        return !this.isInnerUI;
+    }
+
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
             const op = this.UICanvas.getChildByName('InnerUI').getComponent(UIOpacity);
-            this.isShow = !this.isShow;
-            op.opacity = this.isShow ? 255 : 0;
-        } else if (this.isShow) {
+            this.isInnerUI = !this.isInnerUI;
+            op.opacity = this.isInnerUI ? 255 : 0;
+        } else if (this.isInnerUI) {
             if (key.keyCode === KeyCode.CTRL_LEFT && !this.isSelect && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
                 // 按住左ctrl多次选点
                 this.isSelectCtrl = true;
@@ -488,7 +505,7 @@ export class MainController extends Component {
         // screen 1280 * 720
         // pos range: (0, 0) - (1280, 720)
         const pos: Vec2 = e.touch.getUILocation();
-        if (this.isShow) {
+        if (this.isInnerUI) {
             if (pos.x > 20 && pos.x < 620 && pos.y > 60 && pos.y < 660) {
                 this.isSelect = true;
                 pos.subtract2f(20, 60);
@@ -519,7 +536,7 @@ export class MainController extends Component {
 
     private onTouchMove(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
-        if (this.isShow) {              // ui交互事件
+        if (this.isInnerUI) {              // ui交互事件
             if (PREVIEW)
                 console.log('moving');
             this.isMove = true;
@@ -533,7 +550,7 @@ export class MainController extends Component {
 
     private onTouchEnd(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
-        if (this.isShow) {
+        if (this.isInnerUI) {
             if (this.isSelect) {
                 if (this.isMove && !this.isSelectCtrl) {
                     pos.subtract2f(20, 60);
@@ -775,4 +792,33 @@ export class MainController extends Component {
         this.renderVoxelSelect(id);
     }
 
+    public async onDrawEditVoxel(vid: string) {
+        console.log('draw id: ' + vid);
+        // await this.drawEditLock.acquire();
+        console.log('origin id: ' + vid + ', now id: ' + this.drawEditVoxelIdBuffer);
+
+        if (vid === this.drawEditVoxelIdBuffer) {
+            const voxelData = this.VoxelDataHistory.getElementById(vid);
+            let i = 0;
+            console.log(voxelData);
+            for (; i < voxelData.length; i++) {
+                if (i >= this.voxelList.Edit.length) {
+                    const ev = this.createVoxel(voxelScale.Edit);
+                    this.VoxelNodeEdit.addChild(ev);
+                    this.voxelList.Edit.push(ev);
+                }
+                const ev = this.voxelList.Edit[i];
+                ev.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Edit);
+                ev.active = true;
+            }
+    
+            while (i < this.voxelList.Edit.length && this.voxelList.Edit[i].active) {
+                this.voxelList.Edit[i++].active = false;
+            }
+
+        } 
+
+        // this.drawEditLock.release();
+    
+    }
 }

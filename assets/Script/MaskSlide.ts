@@ -23,6 +23,8 @@ export class MaskSlide extends Component {
     private totalMoveOffset: number = 0;
     private isInertia: boolean = false;
     private inertiaVelocity: number = 0;
+    private isClickIn: boolean = false;
+    private isMove: boolean = false;
     
 
     start() {
@@ -87,40 +89,49 @@ export class MaskSlide extends Component {
 
 
     onTouchEnd(e: EventTouch) {
-        const curTime = (new Date()).getMilliseconds();
-        const dt = (curTime < this.lastMoveTime ? 1000 : 0) + curTime - this.lastMoveTime;      
-        if (dt < 50) {
-            this.isInertia = true;
-            this.inertiaVelocity = this.totalMoveOffset / this.totalMoveTime;
+        if (this.isClickIn) {
+            if (this.isMove) {
+                const curTime = (new Date()).getMilliseconds();
+                const dt = (curTime < this.lastMoveTime ? 1000 : 0) + curTime - this.lastMoveTime;      
+                if (dt < 50) {
+                    this.isInertia = true;
+                    this.inertiaVelocity = this.totalMoveOffset / this.totalMoveTime;
+                }
+                this.totalMoveTime = 0;
+            }
         }
-        this.totalMoveTime = 0;
-        // this.isBouncing = false;
+        this.isClickIn = false;
     }
 
     onTouchMove(e: EventTouch) {
-        const offset = e.getDeltaX();
-        this.translateCamera(offset * 0.01, this.moveSpeed);
-        // getMilliseconds()的范围为0-1000
-        const curMoveTime = (new Date()).getMilliseconds();  
-        const dt = curMoveTime < this.lastMoveTime ? curMoveTime + 1000 - this.lastMoveTime : curMoveTime - this.lastMoveTime;
-        // 上一次移动距离同向且滑动间隔小于50ms就积累滑动时间和距离
-        if (dt < 50 && offset * this.lastMoveOffset > 0) {
-            this.totalMoveOffset += offset;
-            this.totalMoveTime += dt;
-        } else {
-            this.totalMoveOffset = 0;
-            this.totalMoveTime = 0;
-        }
+        if (this.isClickIn) {
+            const offset = e.getDeltaX();
+            this.translateCamera(offset * 0.1, this.moveSpeed);
+            // getMilliseconds()的范围为0-1000
+            const curMoveTime = (new Date()).getMilliseconds();  
+            const dt = curMoveTime < this.lastMoveTime ? curMoveTime + 1000 - this.lastMoveTime : curMoveTime - this.lastMoveTime;
+            // 上一次移动距离同向且滑动间隔小于50ms就积累滑动时间和距离
+            if (dt < 50 && offset * this.lastMoveOffset > 0) {
+                this.totalMoveOffset += offset;
+                this.totalMoveTime += dt;
+            } else {
+                this.totalMoveOffset = 0;
+                this.totalMoveTime = 0;
+            }
 
-    
-        this.lastMoveOffset = offset;
-        this.lastMoveTime = curMoveTime;
+            this.isMove = true;
+            this.lastMoveOffset = offset;
+            this.lastMoveTime = curMoveTime;
+        }
     }
     
 
     onTouchStart(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
-        // if ()
+        if (this.controller?.isOutUI() && pos.x >= 150 && pos.x <= 1130 && pos.y >= 60 && pos.y <= 210) {
+            this.isClickIn = true;
+            console.log('命中');
+        }
         this.isInertia = false;
     }
 }
