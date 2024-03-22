@@ -1,4 +1,4 @@
-import { _decorator, Component, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Component, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 import { PREVIEW } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
 const { ccclass, property } = _decorator;
@@ -110,7 +110,7 @@ export class MainController extends Component {
     public selectRT: RenderTexture = null;
 
     @property()
-    public historyMaxLength: number = 10;
+    public historyMaxLength: number = 20;
 
     @property(SpriteFrame)
     public FUFUSF: SpriteFrame = null;
@@ -267,7 +267,7 @@ export class MainController extends Component {
             if (this.isSnapShotReady === 1) {
                 this.isSnapShotReady++;
             } else {
-                this.node.emit(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotId);
+                this.node.emit(SNAPSHOT_FOR_NEW_VOXEL_EVENT, { id: this.snapShotId });
                 this.isSnapShotReady = 0;
             }
         }
@@ -359,7 +359,6 @@ export class MainController extends Component {
 
 
             this.pointTree[Math.min(Math.floor(d.pos.x / 60), 9)][Math.min(Math.floor(d.pos.y / 60), 9)].push(d);
-            // console.log(point.pos.x * 600 - 620, point.pos.y - 300);
             
             this.scatterGraph.fillColor.fromHEX(type2Color[d.type]);
             this.scatterGraph.circle(d.pos.x - 620, d.pos.y - 300, 2);
@@ -379,8 +378,6 @@ export class MainController extends Component {
     private renderVoxelSelect(id: string) {
         let i = 0;
         const voxelData: Vec3[] = this.VoxelDataHistory.getEleById(id);
-        console.log('in render====================');
-        console.log(voxelData);
         for (; i < voxelData.length; i++) {
             if (i >= this.voxelList.Select.length) {
                 const sv = this.createVoxel(voxelScaleSelect);
@@ -400,36 +397,49 @@ export class MainController extends Component {
         this.snapShotId = id;
     }
 
-    private snapShotVoxel = (event, id) => {
-        console.log('snap shot for voxel ' + id);
-
+    private snapShotVoxel = (msg) => {
+        console.log('shnap shot id is ' + msg.id);
         const snapshot = new SpriteFrame();
         const rtData = this.selectRT.readPixels();
         const voxelTexture = new Texture2D();
         voxelTexture.reset({ width: this.selectRT.width, height: this.selectRT.height, format: Texture2D.PixelFormat.RGBA8888, mipmapLevel: 0 })
         voxelTexture.uploadData(rtData, 0, 0);
         voxelTexture.updateImage();
-        console.log(voxelTexture.image);
         snapshot.texture = voxelTexture;
         
         const spriteNode = new Node();
         spriteNode.layer = this.HistoryBgMask.layer;
         spriteNode.setScale(new Vec3(1, -1, 1));
+
         const sp = spriteNode.addComponent(Sprite);
         sp.spriteFrame = snapshot;
-        // sp.spriteFrame = this.FUFUSF;
+        const idLabel = new Node();
+        idLabel.layer = this.HistoryBgMask.layer;
+        const il = idLabel.addComponent(Label);
+        il.string = msg.id;
+        il.fontSize = 20;
+        spriteNode.addChild(idLabel);
+        idLabel.setPosition(new Vec3(0, 70, 0));
+        idLabel.setScale(new Vec3(1, -1, 1));
+        
         this.HistoryBgMask.addChild(spriteNode);
         spriteNode.getComponent(UITransform).contentSize.set(100, 100);
         const childList = this.HistoryBgMask.children;
         if (childList.length > this.historyMaxLength) 
             this.HistoryBgMask.removeChild(childList[0]);
-        let xpos = 440;
+        let xpos = 0;   
         for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
-            childList[i].position = new Vec3(xpos, 0, 0);
+            childList[i].position = new Vec3(xpos, 15, 0);
         }
-        console.log('snapshot list');
-        console.log(childList);
+        this.HistoryBgMask.setPosition(new Vec3(440, 0, 0));
         this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
+    }
+
+    public getHistoryLength() {
+        if (this.VoxelDataHistory.length() != this.HistoryBgMask.children.length) {
+            console.error('history length is not equal to snapshot length!!!!');
+        }
+        return this.VoxelDataHistory.length();
     }
 
     private keyDown(key: EventKeyboard) {
@@ -439,13 +449,22 @@ export class MainController extends Component {
             this.isShow = !this.isShow;
             op.opacity = this.isShow ? 255 : 0;
         } else if (this.isShow) {
-            if (PREVIEW)
-                console.log('is one? ' + this.selectType);
             if (key.keyCode === KeyCode.CTRL_LEFT && !this.isSelect && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
                 // 按住左ctrl多次选点
                 this.isSelectCtrl = true;
             }
-        }
+            // TODO:test code!!连上服务器测试没问题就删掉
+            else if (key.keyCode === KeyCode.KEY_A) {
+                const id = randomRangeInt(0, 10000).toString();
+                if (this.VoxelDataHistory.isExist(id) === -1) {
+                    if (this.VoxelDataHistory.length() === this.historyMaxLength)
+                        this.VoxelDataHistory.popHead();
+                    this.VoxelDataHistory.push([new Vec3(0, 0, 0)], id);
+                    this.snapShotVoxel({id: id});
+                }
+            }
+        } 
+
     }
 
     private keyPressing(key: EventKeyboard) {
@@ -513,8 +532,6 @@ export class MainController extends Component {
     }
 
     private onTouchEnd(e: EventTouch) {
-        if (PREVIEW)
-            console.log(this.isSelectCtrl);
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isShow) {
             if (this.isSelect) {
@@ -593,7 +610,6 @@ export class MainController extends Component {
                             if (PREVIEW) {
                                 console.log('shot on node!' + pointList[i].pos);
                                 console.log(pos);
-                                console.log(this.UICanvas.getChildByName('InnerUI').children);
                             }
                             break;
                         }
@@ -602,7 +618,6 @@ export class MainController extends Component {
                         if (!this.isSelectCtrl || this.selectNodeList.length === 1) {
                             this.selectType = SelectingType.Single;
                             this.SelectSingleButtons.active = true;
-                            console.log(this.data[this.selectDataList[0]]);
                         } else {
                             this.selectType = SelectingType.Multi;
                             this.SelectMultiButtons.active = true;      
@@ -686,7 +701,6 @@ export class MainController extends Component {
         
         console.log(url);
         xhr.send();
-        
         console.log('send end');
     }
 

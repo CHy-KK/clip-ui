@@ -5,15 +5,13 @@ export class VoxelHistoryQueue {
 
     private rawVoxelDataHistory: Queue<Vec3[]>; 
     private voxelIdxHistory: Queue<string>;    
-    private voxelSnapShotHistory: Queue<Texture2D>;    
 
     constructor(maxlength: number) {
         this.rawVoxelDataHistory = new Queue<Vec3[]>(maxlength);
         this.voxelIdxHistory = new Queue<string>(maxlength);
-        this.voxelSnapShotHistory = new Queue<Texture2D>(maxlength);
     }
 
-    public isExist(id): number {
+    public isExist(id: string): number {
         for (let i = 0; i < this.voxelIdxHistory.length; i++) {
             if (this.voxelIdxHistory.getElement(i) === id) 
                 return i;
@@ -21,7 +19,7 @@ export class VoxelHistoryQueue {
         return -1;
     }
 
-    public getEleById(id) {
+    public getEleById(id: string): Vec3[] {
         const idx = this.isExist(id);
         if(idx == -1 && PREVIEW) {
             console.error('this id is not in queue now');
@@ -30,11 +28,11 @@ export class VoxelHistoryQueue {
         return idx === -1 ? null : this.rawVoxelDataHistory.getElement(idx);
     }
 
-    public getElement(idx) {
+    public getElement(idx: number): Vec3[] {
         return this.rawVoxelDataHistory.getElement(idx);
     }
 
-    public push(voxel, id): boolean {
+    public push(voxel: Vec3[], id: string): boolean {
         if (this.isExist(id) != -1)
             return true;
         
@@ -100,7 +98,7 @@ export  class Queue<T> {
         }
     }
 
-    public head() {
+    public head(): T {
         if (this.length === 0) {
             if (PREVIEW)
                 console.error('array empty has no head!');
@@ -109,7 +107,7 @@ export  class Queue<T> {
         return this.data[this.headIdx];
     }
 
-    public tail() {
+    public tail(): T {
         if (this.length === 0) {
             if (PREVIEW)
                 console.error('array empty has no head!');
@@ -118,7 +116,7 @@ export  class Queue<T> {
         return this.data[this.tailIdx === 0 ? this.maxLength - 1 : this.tailIdx - 1];
     }
 
-    public getElement(idx: number) {
+    public getElement(idx: number): T {
         if (idx > this.length) {
             if (PREVIEW)
                 console.error('array out of bounds!!');
