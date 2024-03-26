@@ -5,10 +5,11 @@ const { ccclass, property } = _decorator;
 @ccclass('SnapShotNode')
 export class SnapShotNode extends Component {
     public vid: string = '';
-    public controller: MainController = null;
+    private controller: MainController = null;
     private button: Button = null;
 
     start() {
+        this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         this.button = this.node.addComponent(Button);
         this.button.target = this.node;
         const clickEvent = new EventHandler();
@@ -16,10 +17,13 @@ export class SnapShotNode extends Component {
         clickEvent.component = 'SnapShotNode';
         clickEvent.handler = 'onClick';
         this.button.clickEvents.push(clickEvent);
+
     }
 
 
     private onClick() {
+        if (!this.controller)
+            this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         if (this.controller.isOutUI()) {
             console.log('button ' + this.vid + ' is clicked');
             this.controller.drawEditVoxelIdBuffer = this.vid;

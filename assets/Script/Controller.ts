@@ -1,8 +1,9 @@
-import { _decorator, Button, Component, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 import { PREVIEW } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
 import { SnapShotNode } from './SnapShotNode';
 import { LockAsync } from './Utils/Lock';
+import { PanelNode } from './PanelNode';
 const { ccclass, property } = _decorator;
 
 const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
@@ -34,14 +35,20 @@ type VoxelBuffer = {
 enum RequestName {
     InitializeOverview = '/initialize_overview',
     GetVoxel = '/get_voxel',
-}
+};
 
 enum SelectingType {
     None = 0,
     Single = 1,
     Range = 2,
     Multi = 3
-}
+};
+
+enum SnapShotState {
+    None = 0,   
+    wait1frame = 1,     // 下一帧截图
+    ready = 2,
+};
 
 const type2Color = [
     'ff0000',
@@ -74,6 +81,9 @@ const voxelScale = {
 // const voxelScale
 // const voxelScale
 // const voxelScale
+export function angle2radian(angle: number): number {
+    return angle * Math.PI * 0.005555556;   // angle * pi / 180(0.005555556 = 1 / 179.999985600)
+}
 
 @ccclass('MainController')
 export class MainController extends Component {
@@ -123,6 +133,9 @@ export class MainController extends Component {
     @property(SpriteFrame)
     public FUFUSF: SpriteFrame = null;
 
+    @property(Node)
+    public quadPanelNode: Node = null;
+
 
     private data: DataPoint[] = [];
     private typeDict: Map<string, number> = new Map();
@@ -143,7 +156,8 @@ export class MainController extends Component {
         Edit: []
     }
     private isGetVoxelFinished: boolean = false;
-    private VoxelDataHistory: VoxelHistoryQueue;
+    private voxelDataHistory: VoxelHistoryQueue;
+    private panelPosBoard: Label = null;
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -153,10 +167,11 @@ export class MainController extends Component {
     private isSelect: boolean = false;
     private isSelectCtrl: boolean = false;
     private selectType: SelectingType = SelectingType.None;
-    private isSnapShotReady: number = 1;
+    private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
     public drawEditVoxelIdBuffer: string = '';
-    private drawEditLock: LockAsync = new LockAsync();
+    private panelClickPos: Vec2 = new Vec2(0);
+    // private drawEditLock: LockAsync = new LockAsync();
 
     // private isSelectingOne: boolean = false;
     // private isSelectingRange: boolean = false;
@@ -175,8 +190,8 @@ export class MainController extends Component {
         };
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
-
-        this.VoxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
+        this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength, this.HistoryBgMask);
+        this.panelPosBoard = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPos').getComponent(Label);
         
         // test code
         // for (let i = 0; i < 1000; i++) {
@@ -215,10 +230,10 @@ export class MainController extends Component {
         this.historyBgGraph.lineTo(100, 110);
         this.historyBgGraph.lineTo(100, 160);
         this.historyBgGraph.lineTo(150, 210);
-        this.historyBgGraph.arc(1130, 160, 50, this.angle2radian(90), this.angle2radian(0), false);
-        this.historyBgGraph.arc(1130, 110, 50, this.angle2radian(0), this.angle2radian(-90), false);
-        this.historyBgGraph.arc(150, 110, 50, this.angle2radian(-90), this.angle2radian(-180), false);
-        this.historyBgGraph.arc(150, 160, 50, this.angle2radian(-180), this.angle2radian(-270), false);
+        this.historyBgGraph.arc(1130, 160, 50, angle2radian(90), angle2radian(0), false);
+        this.historyBgGraph.arc(1130, 110, 50, angle2radian(0), angle2radian(-90), false);
+        this.historyBgGraph.arc(150, 110, 50, angle2radian(-90), angle2radian(-180), false);
+        this.historyBgGraph.arc(150, 160, 50, angle2radian(-180), angle2radian(-270), false);
         this.historyBgGraph.fill();
 
         this.selectGraph.lineWidth = 2;
@@ -268,20 +283,19 @@ export class MainController extends Component {
             this.selectGraph.stroke();
         }
 
-        if (this.isSnapShotReady) {
+        if (this.isSnapShotReady !== SnapShotState.None) {
             console.log("this.snapShot===================");
-            if (this.isSnapShotReady === 1) {
+            if (this.isSnapShotReady === SnapShotState.wait1frame) {
                 this.isSnapShotReady++;
             } else {
                 this.node.emit(SNAPSHOT_FOR_NEW_VOXEL_EVENT, { id: this.snapShotId });
-                this.isSnapShotReady = 0;
+                this.isSnapShotReady = SnapShotState.None;
+                // this.voxelDataHistory.setSnapShotReadyById(this.snapShotId);
             }
         }
     }
 
-    private angle2radian(angle: number): number {
-        return angle * Math.PI * 0.005555556;   // angle * pi / 180(0.005555556 = 1 / 179.999985600)
-    }
+   
 
     private drawAxis() {
         // 原点(-320, 0)
@@ -383,7 +397,7 @@ export class MainController extends Component {
 
     private renderVoxelSelect(id: string) {
         let i = 0;
-        const voxelData: Vec3[] = this.VoxelDataHistory.getElementById(id);
+        const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
         for (; i < voxelData.length; i++) {
             if (i >= this.voxelList.Select.length) {
                 const sv = this.createVoxel(voxelScale.Select);
@@ -399,7 +413,7 @@ export class MainController extends Component {
             this.voxelList.Select[i++].active = false;
         }
 
-        this.isSnapShotReady = 1;
+        this.isSnapShotReady = SnapShotState.wait1frame;
         this.snapShotId = id;
     }
 
@@ -412,47 +426,48 @@ export class MainController extends Component {
         voxelTexture.uploadData(rtData, 0, 0);
         voxelTexture.updateImage();
         snapshot.texture = voxelTexture;
+        this.voxelDataHistory.setSnapShot(snapshot);
         
-        const spriteNode = new Node();
-        const ssn = spriteNode.addComponent(SnapShotNode);
-        ssn.vid = msg.id;
-        ssn.controller = this;
-        spriteNode.layer = this.HistoryBgMask.layer;
-        spriteNode.setScale(new Vec3(1, -1, 1));
+        // const spriteNode = new Node();
+        // const ssn = spriteNode.addComponent(SnapShotNode);
+        // ssn.vid = msg.id;
+        // spriteNode.layer = this.HistoryBgMask.layer;
+        // spriteNode.setScale(new Vec3(1, -1, 1));
 
-        const sp = spriteNode.addComponent(Sprite);
-        sp.spriteFrame = snapshot;
-        const idLabel = new Node();
-        idLabel.layer = this.HistoryBgMask.layer;
-        const il = idLabel.addComponent(Label);
-        il.string = msg.id;
-        il.fontSize = 20;
-        spriteNode.addChild(idLabel);
-        idLabel.setPosition(new Vec3(0, 70, 0));
-        idLabel.setScale(new Vec3(1, -1, 1));
+        // const sp = spriteNode.addComponent(Sprite);
+        // sp.spriteFrame = snapshot;
+        // const idLabel = new Node();
+        // idLabel.layer = this.HistoryBgMask.layer;
+        // const il = idLabel.addComponent(Label);
+        // il.string = msg.id;
+        // il.fontSize = 20;
+        // spriteNode.addChild(idLabel);
+        // idLabel.setPosition(new Vec3(0, 70, 0));
+        // idLabel.setScale(new Vec3(1, -1, 1));
 
         
-        this.HistoryBgMask.addChild(spriteNode);
-        spriteNode.getComponent(UITransform).contentSize.set(100, 100);
-        const childList = this.HistoryBgMask.children;
-        if (childList.length > this.historyMaxLength) {
-            const chtail = childList[0];
-            this.HistoryBgMask.removeChild(childList[0]);
-            chtail.destroy();
-        }
-        let xpos = 0;   
-        for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
-            childList[i].position = new Vec3(xpos, 15, 0);
-        }
-        this.HistoryBgMask.setPosition(new Vec3(440, 0, 0));
+        // this.HistoryBgMask.addChild(spriteNode);
+        // spriteNode.getComponent(UITransform).contentSize.set(100, 100);
+        // const childList = this.HistoryBgMask.children;
+        // if (childList.length > this.historyMaxLength) {
+        //     const chtail = childList[0];
+        //     this.HistoryBgMask.removeChild(childList[0]);
+        //     const sp = chtail.getComponent(Sprite).spriteFrame;
+        //     if (sp.refCount <= 1) {
+        //         sp.destroy();
+        //     }
+        //     chtail.destroy();
+        // }
+        // let xpos = 0;   
+        // for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
+        //     childList[i].position = new Vec3(xpos, 15, 0);
+        // }
+        // this.HistoryBgMask.setPosition(new Vec3(440, 0, 0));
         this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
     }
 
     public getHistoryLength() {
-        if (this.VoxelDataHistory.length() != this.HistoryBgMask.children.length) {
-            console.error('history length is not equal to snapshot length!!!!');
-        }
-        return this.VoxelDataHistory.length();
+        return this.voxelDataHistory.length();
     }
 
     public isOutUI() {
@@ -473,10 +488,10 @@ export class MainController extends Component {
             // TODO:test code!!连上服务器测试没问题就删掉
             else if (key.keyCode === KeyCode.KEY_A) {
                 const id = randomRangeInt(0, 10000).toString();
-                if (this.VoxelDataHistory.isExist(id) === -1) {
-                    if (this.VoxelDataHistory.length() === this.historyMaxLength)
-                        this.VoxelDataHistory.popHead();
-                    this.VoxelDataHistory.push([new Vec3(0, 0, 0)], id);
+                if (this.voxelDataHistory.isExist(id) === -1) {
+                    if (this.voxelDataHistory.length() === this.historyMaxLength)
+                        this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push([new Vec3(0, 0, 0)], id, parseInt(id));
                     this.snapShotVoxel({id: id});
                 }
             }
@@ -648,6 +663,10 @@ export class MainController extends Component {
                     (pos.y - this.quadPanelPos.bottom) / (this.quadPanelPos.top - this.quadPanelPos.bottom));
                 uv.x = Math.max(0, Math.min(uv.x, 1));
                 uv.y = Math.max(0, Math.min(uv.y, 1));
+                this.panelClickPos = uv;
+                if (!this.panelPosBoard)
+                    this.panelPosBoard = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPos').getComponent(Label);
+                this.panelPosBoard.string = `x=${uv.x}\ny=${uv.y}`;
                 
                 if (PREVIEW)
                     console.log('panel uv:' + uv);
@@ -743,7 +762,7 @@ export class MainController extends Component {
 
     // id用来唯一标识这个体素
     // 调用此接口时思考一下id查重的问题
-    private getVoxel(id: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
+    private getVoxelFromServer(id: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
         let xhr = new XMLHttpRequest();
 
         let url = SERVER_HOST + RequestName.GetVoxel + `/${idx0}-${idx1}-${idx2}-${idx3}/${xval}${xval == 0 ? '.0' : ''}-${yval}${yval == 0 ? '.0' : ''}`;
@@ -767,9 +786,11 @@ export class MainController extends Component {
                     }
                 }
 
-                if (!this.VoxelDataHistory.push(voxelData, id)) {   // 如果队列满了则pop掉队首
-                    this.VoxelDataHistory.popHead();
-                    this.VoxelDataHistory.push(voxelData, id);
+                // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
+                // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? -1 : idx0)) {   // 如果队列满了则pop掉队首
+                    this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? -1 : idx0);
                 }   
                 
                 this.isGetVoxelFinished = true;
@@ -782,9 +803,11 @@ export class MainController extends Component {
     }
 
     public async onSingleGetVoxelButtonClick() {
+        // TODO:这里的id最好还是用数据点的name
+        // this.data[this.selectDataList[0]].name;
         const id = this.selectDataList[0].toString();
-        if (this.VoxelDataHistory.isExist(id) === -1) {
-            this.getVoxel(id, this.selectDataList[0]);
+        if (this.voxelDataHistory.isExist(id) === -1) {
+            this.getVoxelFromServer(id, this.selectDataList[0]);
             await this.waitUntilGetVoxelFnish();
             console.log('get voxel finished');
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
@@ -798,7 +821,7 @@ export class MainController extends Component {
         console.log('origin id: ' + vid + ', now id: ' + this.drawEditVoxelIdBuffer);
 
         if (vid === this.drawEditVoxelIdBuffer) {
-            const voxelData = this.VoxelDataHistory.getElementById(vid);
+            const voxelData = this.voxelDataHistory.getVoxelById(vid);
             let i = 0;
             console.log(voxelData);
             for (; i < voxelData.length; i++) {
@@ -819,6 +842,62 @@ export class MainController extends Component {
         } 
 
         // this.drawEditLock.release();
-    
+    }
+
+    // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
+    public onSingleAddToPanelButtonClick() {
+        const id = this.selectDataList[0].toString();
+        const childList = this.quadPanelNode.children;
+
+        for (let i = 0; i < 4; i++) {
+            if (id === childList[i].getComponent(PanelNode).vid)
+                return;
+        }
+        let i = 0;
+        console.log(childList);
+        for (; i < 4; i++) {
+            if (!childList[i].active) {
+                const qsp = childList[i].getComponent(Sprite);
+                qsp.spriteFrame = this.voxelDataHistory.getSnapShotById(id);
+                if (qsp.spriteFrame) {
+                    childList[i].active = true;
+                    childList[i].getComponent(PanelNode).vid = id;
+                    break;
+                } else
+                    return;
+            }
+        }
+
+        if (i > 4) {
+            childList[4].getComponent(Label).string = "请先点击图片删除一个节点";
+            childList[4].active = true;
+            this.scheduleOnce(() => {
+                childList[4].active = false;
+            }, 2000);
+        }
+    }
+
+    public isExistHistoryList(id: string) {
+        return this.voxelDataHistory.isExist(id);
+    }
+
+    public onInterpolationButtonClick() {
+        // this.panelClickPos.xy
+        const childList = this.quadPanelNode.children;
+        const getIdx = (i: number) => {
+            return this.voxelDataHistory.getIdxInDataById(childList[i].getComponent(PanelNode).vid)
+        }
+        const idxList = [
+            childList[0].active ? getIdx(0) : -1,
+            childList[1].active ? getIdx(1) : -1,
+            childList[2].active ? getIdx(2) : -1,
+            childList[3].active ? getIdx(3) : -1];
+        const id = this.data[idxList[0]].name + '-' 
+            + (idxList[1] === -1 ? '' : (this.data[idxList[1]].name + '-')) 
+            + (idxList[2] === -1 ? '' : (this.data[idxList[2]].name + '-')) 
+            + (idxList[3] === -1 ? '' : (this.data[idxList[3]].name + '-')) 
+            + this.panelClickPos.x.toString() + '-' + this.panelClickPos.y.toString();
+        
+        this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);
     }
 }

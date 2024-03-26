@@ -44,8 +44,6 @@ export class MaskSlide extends Component {
     }
 
     lateUpdate(deltaTime: number) {
-        if (!this.controller)
-            this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
 
         if(this.isInertia) {
             const curmove = lerp(this.inertiaVelocity, 0, this.totalMoveTime / 1500);
@@ -86,8 +84,6 @@ export class MaskSlide extends Component {
         
     }
 
-
-
     onTouchEnd(e: EventTouch) {
         if (this.isClickIn) {
             if (this.isMove) {
@@ -127,6 +123,8 @@ export class MaskSlide extends Component {
     
 
     onTouchStart(e: EventTouch) {
+        if (!this.controller)
+            this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         const pos: Vec2 = e.touch.getUILocation();
         if (this.controller?.isOutUI() && pos.x >= 150 && pos.x <= 1130 && pos.y >= 60 && pos.y <= 210) {
             this.isClickIn = true;
