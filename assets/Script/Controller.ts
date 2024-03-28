@@ -125,6 +125,7 @@ export class MainController extends Component {
     private snapShotId: string = '';
     public drawEditVoxelIdBuffer: string = '';
     private panelClickPos: Vec2 = new Vec2(0);
+    private isPanel: boolean = false;
     // private drawEditLock: LockAsync = new LockAsync();
 
     // private isSelectingOne: boolean = false;
@@ -549,6 +550,8 @@ export class MainController extends Component {
                     this.selectNodeList.pop();
                     this.selectDataList.pop();
                 } 
+            } else if (pos.x > this.quadPanelPos.left && pos.x < this.quadPanelPos.right && pos.y > this.quadPanelPos.bottom && pos.y < this.quadPanelPos.top) {
+                this.isPanel = true;
             }
         }
         
@@ -562,6 +565,21 @@ export class MainController extends Component {
             this.isMove = true;
             if (this.isSelect) {
                 this.selectMovingPos = pos;
+            } else if (this.isPanel) {
+                const panelWidth = (this.quadPanelPos.right - this.quadPanelPos.left);
+                let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
+                    (pos.y - this.quadPanelPos.bottom) / panelWidth);
+                uv.x = Math.max(0, Math.min(uv.x, 1));
+                uv.y = Math.max(0, Math.min(uv.y, 1));
+                this.panelClickPos = uv;
+                if (!this.panelPosBoardX || !this.panelPosBoardY) {
+                    this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
+                    this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+                }
+                this.panelPosBoardX.string = `x=${uv.x}`;
+                this.panelPosBoardY.string = `y=${uv.y}`;
+                const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
+                touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
             }
         } else {                        // 3d体素交互事件
             
@@ -657,10 +675,10 @@ export class MainController extends Component {
                     }
                     // else
                 } 
-            } else if (pos.x > this.quadPanelPos.left && pos.x < this.quadPanelPos.right && pos.y > this.quadPanelPos.bottom && pos.y < this.quadPanelPos.top) {
-
-                let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / (this.quadPanelPos.right - this.quadPanelPos.left), 
-                    (pos.y - this.quadPanelPos.bottom) / (this.quadPanelPos.top - this.quadPanelPos.bottom));
+            } else if (this.isPanel) {
+                const panelWidth = this.quadPanelPos.right - this.quadPanelPos.left
+                let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
+                    (pos.y - this.quadPanelPos.bottom) / panelWidth);
                 uv.x = Math.max(0, Math.min(uv.x, 1));
                 uv.y = Math.max(0, Math.min(uv.y, 1));
                 this.panelClickPos = uv;
@@ -669,7 +687,9 @@ export class MainController extends Component {
                     this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
                 }
                 this.panelPosBoardX.string = `x=${uv.x}`;
-                this.panelPosBoardY.string = `x=${uv.y}`;
+                this.panelPosBoardY.string = `y=${uv.y}`;
+                const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
+                touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
                 
                 if (PREVIEW)
                     console.log('panel uv:' + uv);
@@ -678,7 +698,8 @@ export class MainController extends Component {
 
         this.isMove = false;
         this.isSelect = false;
-        console.log('clear select ');
+        this.isPanel = false;
+        console.log('clear select');
         this.selectGraph.clear();
     }
 
@@ -886,7 +907,7 @@ export class MainController extends Component {
         return this.voxelDataHistory.isExist(id);
     }
 
-    public onInterpolationButtonClick() {
+    public async onInterpolationButtonClick() {
         // this.panelClickPos.xy
         const childList = this.quadPanelNode.children;
         const getIdx = (i: number) => {
@@ -903,6 +924,13 @@ export class MainController extends Component {
             + (idxList[3] === -1 ? '' : (this.data[idxList[3]].name + '-')) 
             + this.panelClickPos.x.toString() + '-' + this.panelClickPos.y.toString();
         
-        this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);
+        
+        if (this.voxelDataHistory.isExist(id) === -1) {
+            this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);
+            await this.waitUntilGetVoxelFnish();
+            console.log('get voxel finished');
+            this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+        }
+        this.renderVoxelSelect(id);
     }
 }
