@@ -1,5 +1,5 @@
 import { _decorator, Component, director, EventKeyboard, EventTouch, input, Input, KeyCode, Node, quat, Quat, Vec2, Vec3 } from 'cc';
-import { angle2radian, MainController } from './Controller';
+import { MainController } from './Controller';
 const { ccclass, property } = _decorator;
 
 @ccclass('EditVoxel')

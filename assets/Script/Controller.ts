@@ -1,9 +1,10 @@
-import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Prefab, random, randomRange, randomRangeInt, renderer, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 import { PREVIEW } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
 import { SnapShotNode } from './SnapShotNode';
 import { LockAsync } from './Utils/Lock';
 import { PanelNode } from './PanelNode';
+import { DataPoint, RectSize, VoxelBuffer, SelectingType, SnapShotState, voxelScale, type2Color, RequestName, angle2radian } from './Utils/Utils';
 const { ccclass, property } = _decorator;
 
 const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
@@ -11,157 +12,110 @@ const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
 const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel';
 export const DRAW_EDIT_VOXEL_EVENT = 'draw-edit-voxel';
 
-type DataPoint = {
-    pos: Vec2;
-    value: number;
-    idx: number;    // 映射到原数组中的序号
-    type: number;
-    name: string;
-    img: Texture2D;
-};
-
-type rectSize = {
-    left: number,
-    right: number, 
-    bottom: number, 
-    top: number
-};
-
-type VoxelBuffer = {
-    Select: Node[],
-    Edit: Node[]
-};
-
-enum RequestName {
-    InitializeOverview = '/initialize_overview',
-    GetVoxel = '/get_voxel',
-};
-
-enum SelectingType {
-    None = 0,
-    Single = 1,
-    Range = 2,
-    Multi = 3
-};
-
-enum SnapShotState {
-    None = 0,   
-    wait1frame = 1,     // 下一帧截图
-    ready = 2,
-};
-
-const type2Color = [
-    'ff0000',
-    '00ff00',
-    '0000ff',
-    'ffff00',
-    'ff00ff',
-    '00ffff',
-    'f0f000',
-    'f000f0',
-    '00f0f0',
-    '88f088',
-    'f08888',
-    '8888f0',
-    'bcaf6e',
-    'cdfcae',
-    '7ac6ed',
-    '34acds',
-    '9fe4a5',
-    'ba4390',
-    '7384fa',
-    '1188ee',
-    'ee8811',
-]
-
-const voxelScale = {
-    Select: 0.05,
-    Edit: 0.1
-}
 // const voxelScale
 // const voxelScale
 // const voxelScale
-export function angle2radian(angle: number): number {
-    return angle * Math.PI * 0.005555556;   // angle * pi / 180(0.005555556 = 1 / 179.999985600)
-}
 
 @ccclass('MainController')
 export class MainController extends Component {
 
+    /******************* 可外部编辑参数 *******************/
+    @property()
+    public readonly historyMaxLength: number = 20;
+
+    @property({ type: Vec4, tooltip: '显示散点图区域x, y, z, w=>left, right, bottom, top' })
+    public readonly scatterRectVec4: Vec4 = new Vec4(20, 620, 60, 660);
+
+    @property({ tooltip: '坐标轴刻度数量' })
+    public scaleSegNum: number = 10;
+
+    @property({ tooltip: '一行/列分块数量，根据数据点数量动态变化' })
+    public readonly tileNum: number = 10;
+
+    
+    /******************* 场景数据 *******************/
     @property(Node)
-    public ScatterGraphic: Node = null;
+    public readonly AxisGraphic: Node = null;
 
     @property(Node)
-    public SelectGraphic: Node = null;
+    public readonly ScaleGraphic: Node = null;
 
     @property(Node)
-    public HistoryBgGraphic: Node = null;
+    public readonly ScatterGraphic: Node = null;
 
     @property(Node)
-    public HistoryBgMask: Node = null;
+    public readonly SelectGraphic: Node = null;
 
     @property(Node)
-    public UICanvas: Node = null;
+    public readonly HistoryBgGraphic: Node = null;
+
+    @property(Node)
+    public readonly HistoryBgMask: Node = null;
+
+    @property(Node)
+    public readonly UICanvas: Node = null;
 
     @property(Prefab)
-    public SelectNode: Prefab = null;
+    public readonly SelectNode: Prefab = null;
 
     @property(Node)
-    public SelectSingleButtons: Node = null;
+    public readonly SelectSingleButtons: Node = null;
 
     @property(Node)
-    public SelectMultiButtons: Node = null;
+    public readonly SelectMultiButtons: Node = null;
 
     @property(Node)
-    public SelectRangeButtons: Node = null;
+    public readonly SelectRangeButtons: Node = null;
 
     @property(Prefab)
-    public VoxelCube: Prefab = null;
+    public readonly VoxelCube: Prefab = null;
 
     @property({ type: Node, tooltip: '挂载inner ui体素数据的节点' })
-    public VoxelNodeSelect: Node = null;
+    public readonly VoxelNodeSelect: Node = null;
 
     @property({ type: Node, tooltip: '挂载世界空间可编辑体素数据的节点' })
-    public VoxelNodeEdit: Node = null;
+    public readonly VoxelNodeEdit: Node = null;
 
     @property(RenderTexture)
-    public selectRT: RenderTexture = null;
-
-    @property()
-    public historyMaxLength: number = 20;
+    public readonly selectRT: RenderTexture = null;
 
     @property(SpriteFrame)
-    public FUFUSF: SpriteFrame = null;
+    public readonly FUFUSF: SpriteFrame = null;
 
     @property(Node)
-    public quadPanelNode: Node = null;
-
+    public readonly quadPanelNode: Node = null;
 
     private data: DataPoint[] = [];
     private typeDict: Map<string, number> = new Map();
-    private pointTree: DataPoint[][][] = [];
+    private pointTree: DataPoint[][][] = [];    // pointTree的分块不随坐标轴刻度变化而变化，始终为10 * 10
     private canvasSize: Vec2 = new Vec2(0);
-    private scatterGraph: Graphics;
-    private selectGraph: Graphics;
+    private axisGraph: Graphics;         // 绘制坐标轴（只需绘制一次）
+    private scaleGraph: Graphics;       // 坐标轴刻度绘制（提供调整接口）
+    private scatterGraph: Graphics;     // 散点图绘制（框选提供重绘接口）
+    private selectGraph: Graphics;      // 选中区域绘制
     private historyBgGraph: Graphics;
-    private scatterRange: rectSize; // x-min, x-max, y-min, y-max
+    private scatterRange: RectSize; // x-min, x-max, y-min, y-max
     private scatterWidth: number;
     private scatterHeight: number;
     private isInnerUI: boolean = true;
     private selectNodeList: Node[] = [];
     private selectDataList: number[] = []
-    private quadPanelPos: rectSize;
+    private quadPanelPos: RectSize;
     private voxelList: VoxelBuffer = {
         Select: [],
         Edit: []
     }
     private isGetVoxelFinished: boolean = false;
     private voxelDataHistory: VoxelHistoryQueue;
-    private panelPosBoard: Label = null;
+    private panelPosBoardX: Label = null;
+    private panelPosBoardY: Label = null;
+    private scatterRect: RectSize;
+    private axisLength: number;
+    private tileLength: number;
 
     // 交互数据
     private isInitialize: boolean = false;
-    private selectPos: Vec2 = new Vec2(0);
+    private clickPos: Vec2 = new Vec2(0);
     private selectMovingPos: Vec2 =  new Vec2(0);
     private isMove: boolean = false;
     private isSelect: boolean = false;
@@ -191,35 +145,22 @@ export class MainController extends Component {
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
         this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength, this.HistoryBgMask);
-        this.panelPosBoard = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPos').getComponent(Label);
+        this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
+        this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
         
-        // test code
-        // for (let i = 0; i < 1000; i++) {
-        //     this.data.push(new Vec3(randomRange(-10, 10), randomRange(-10, 10), randomRange(-10, 10)));
-        // }
-
-        // if (this.data.length > 0) {
-        //     this.scatterRange = {
-        //         left: this.data[0].x, 
-        //         right: this.data[0].x, 
-        //         bottom: this.data[0].y, 
-        //         top: this.data[0].y
-        //     };
-        // }
-        // this.data.forEach(value => {
-        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.x);
-        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.x);
-        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.y);
-        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.y);
-        // })
-
-        // this.drawAxis();
-        // this.drawScatter();
-
+        this.axisGraph = this.AxisGraphic.getComponent(Graphics);
+        this.scaleGraph = this.ScaleGraphic.getComponent(Graphics);
         this.scatterGraph = this.ScatterGraphic.getComponent(Graphics);
         this.selectGraph = this.SelectGraphic.getComponent(Graphics);
         this.historyBgGraph = this.HistoryBgGraphic.getComponent(Graphics);
-
+        this.scatterRect = {
+            left: Math.min(this.scatterRectVec4.x, this.scatterRectVec4.y),
+            right: Math.max(this.scatterRectVec4.x, this.scatterRectVec4.y),
+            bottom: Math.min(this.scatterRectVec4.z, this.scatterRectVec4.w),
+            top: Math.max(this.scatterRectVec4.z, this.scatterRectVec4.w),
+        }
+        this.axisLength = this.scatterRect.right - this.scatterRect.left;
+        this.tileLength = this.axisLength / this.tileNum;
         this.historyBgGraph.fillColor.fromHEX('656565');
         this.historyBgGraph.moveTo(150, 210);
         this.historyBgGraph.lineTo(1130, 210);
@@ -249,6 +190,48 @@ export class MainController extends Component {
             this.voxelList.Edit.push(ev);
             this.VoxelNodeEdit.addChild(ev);
         }
+        
+        /************* test code *************/
+        type DataPoint = {
+            pos: Vec2;
+            value: number;
+            idx: number;    // 映射到原数组中的序号
+            type: number;
+            name: string;
+            img: Texture2D;
+        };
+        for (let i = 0; i < 1000; i++) {
+            this.data.push({
+                pos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+                value: 0,
+                idx: i,
+                type: randomRangeInt(0, 10),
+                name: i.toString(),
+                img: null
+            })
+        }
+
+        if (this.data.length > 0) {
+            this.scatterRange = {
+                left: this.data[0].pos.x, 
+                right: this.data[0].pos.x, 
+                bottom: this.data[0].pos.y, 
+                top: this.data[0].pos.y
+            };
+        }
+        this.data.forEach(value => {
+            this.scatterRange.left = Math.min(this.scatterRange.left, value.pos.x);
+            this.scatterRange.right = Math.max(this.scatterRange.right, value.pos.x);
+            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.pos.y);
+            this.scatterRange.top = Math.max(this.scatterRange.top, value.pos.y);
+        })
+
+        this.drawAxis(this.scatterRect);
+        this.drawAxisScale(this.scatterRect);
+        this.drawScatter(this.scatterRect);
+        this.isInitialize = true;
+        /************* test code *************/
+
     }
 
     onEnable () {
@@ -274,12 +257,11 @@ export class MainController extends Component {
     update(deltaTime: number) {
         if (this.isInitialize && this.isSelect && this.isMove && !this.isSelectCtrl) {
             this.selectGraph.clear();
-            // selectMovingPos没有做-20 -60校正处理
-            this.selectGraph.moveTo(this.selectPos.x + 20, this.selectPos.y + 60);
-            this.selectGraph.lineTo(this.selectMovingPos.x, this.selectPos.y + 60);
+            this.selectGraph.moveTo(this.clickPos.x + this.scatterRect.left, this.clickPos.y + this.scatterRect.bottom);
+            this.selectGraph.lineTo(this.selectMovingPos.x, this.clickPos.y + this.scatterRect.bottom);
             this.selectGraph.lineTo(this.selectMovingPos.x, this.selectMovingPos.y);
-            this.selectGraph.lineTo(this.selectPos.x + 20, this.selectMovingPos.y);
-            this.selectGraph.lineTo(this.selectPos.x + 20, this.selectPos.y + 60);
+            this.selectGraph.lineTo(this.clickPos.x + this.scatterRect.left, this.selectMovingPos.y);
+            this.selectGraph.lineTo(this.clickPos.x + this.scatterRect.left, this.clickPos.y + this.scatterRect.bottom);
             this.selectGraph.stroke();
         }
 
@@ -297,91 +279,116 @@ export class MainController extends Component {
 
    
 
-    private drawAxis() {
-        // 原点(-320, 0)
-        // scattergraph的ui坐标被放在了屏幕中心，后面放到左下角可以统一0-1280/0-720坐标
-        this.scatterGraph.lineWidth = 2;
-        this.scatterGraph.strokeColor.fromHEX('#eeeeee');
+    // TODO：限制renderRect必须为正方形
+    private drawAxis(renderRect: RectSize) {
+        if (renderRect.right - renderRect.left != renderRect.top - renderRect.bottom) {
+            console.error('坐标轴范围不等！');
+            return;
+        }
+        const originPos = new Vec2(lerp(renderRect.left, renderRect.right, 0.5), lerp(renderRect.bottom, renderRect.top, 0.5));
+
+        this.axisGraph.lineWidth = 2;
+        this.axisGraph.strokeColor.fromHEX('#eeeeee');
         // x-axis
-        this.scatterGraph.moveTo(-620, 0);
-        this.scatterGraph.lineTo(-20, 0);
-        this.scatterGraph.lineTo(-30, 5);
-        this.scatterGraph.moveTo(-30, -5);
-        this.scatterGraph.lineTo(-20, 0);
+        this.axisGraph.moveTo(renderRect.left, originPos.y);
+        this.axisGraph.lineTo(renderRect.right, originPos.y);
+        this.axisGraph.lineTo(renderRect.right - 10, originPos.y + 5);
+        this.axisGraph.moveTo(renderRect.right - 10, originPos.y - 5);
+        this.axisGraph.lineTo(renderRect.right, originPos.y);
 
         // y-axis
-        this.scatterGraph.moveTo(-320, -300);
-        this.scatterGraph.lineTo(-320, 300);
-        this.scatterGraph.lineTo(-325, 290);
-        this.scatterGraph.moveTo(-320, 300);
-        this.scatterGraph.lineTo(-315, 290);
+        this.axisGraph.moveTo(originPos.x, renderRect.bottom);
+        this.axisGraph.lineTo(originPos.x, renderRect.top);
+        this.axisGraph.lineTo(originPos.x - 5, renderRect.top - 10);
+        this.axisGraph.moveTo(originPos.x, renderRect.top);
+        this.axisGraph.lineTo(originPos.x + 5, renderRect.top - 10);
+        this.axisGraph.stroke();
 
+        
+        console.log()
+    }
+
+    private drawAxisScale(renderRect: RectSize) {
+        const originPos = new Vec2(lerp(renderRect.left, renderRect.right, 0.5), lerp(renderRect.bottom, renderRect.top, 0.5));
+        
+        this.scaleGraph.lineWidth = 2;
+        this.scaleGraph.strokeColor.fromHEX('#eeeeee');
         // origin-label
         const scaleLabel = new Node();
         const sl = scaleLabel.addComponent(Label);
-        this.ScatterGraphic.addChild(scaleLabel);
+        this.ScaleGraphic.addChild(scaleLabel);
         sl.string = `(${((this.scatterRange.left + this.scatterRange.right) * 0.5).toFixed(1)}, ${((this.scatterRange.top + this.scatterRange.bottom) * 0.5).toFixed(1)})`;
         sl.fontSize = 10;
         sl.lineHeight = sl.fontSize;
         sl.color.fromHEX('#eeeeee');
-        scaleLabel.setPosition(new Vec3(-320, -10, 0));
-        scaleLabel.layer = this.ScatterGraphic.layer;
+        scaleLabel.setPosition(new Vec3(originPos.x, originPos.y - 10, 0));
+        scaleLabel.layer = this.ScaleGraphic.layer;
 
-        const scaleLabelListX = [-560, -500, -440, -380, -260, -200, -140, -80];
-        const scaleLabelListY = [-240, -180, -120, -60, 60, 120, 180, 240];
+        const scaleLength = (renderRect.right - renderRect.left) / this.scaleSegNum;
+    
+        let scaleLabelListX = [];
+        let scaleLabelListY = [];
+        for (let xpos = renderRect.left + scaleLength, ypos = renderRect.bottom + scaleLength, i = 0;
+                 i < this.scaleSegNum - 1; i++, xpos += scaleLength, ypos += scaleLength) {
+            if (i === (this.scaleSegNum - 1) / 2)
+                continue;
+            scaleLabelListX.push(xpos);
+            scaleLabelListY.push(ypos);
+        }
 
-        for (let i = 0; i < 8; i++) {
-            this.scatterGraph.moveTo(scaleLabelListX[i], -5);
-            this.scatterGraph.lineTo(scaleLabelListX[i], 5);
-            this.scatterGraph.moveTo(-315, scaleLabelListY[i]);
-            this.scatterGraph.lineTo(-325, scaleLabelListY[i]);
+        for (let i = 0; i < scaleLabelListX.length; i++) {
+            this.scaleGraph.moveTo(scaleLabelListX[i], originPos.y - 5);
+            this.scaleGraph.lineTo(scaleLabelListX[i], originPos.y + 5);
+            this.scaleGraph.moveTo(originPos.x - 5, scaleLabelListY[i]);
+            this.scaleGraph.lineTo(originPos.x + 5, scaleLabelListY[i]);
             const scaleLabelX = new Node();
             const scaleLabelY = new Node();
             const slx = scaleLabelX.addComponent(Label);
             const sly = scaleLabelY.addComponent(Label);
-            this.ScatterGraphic.addChild(scaleLabelX);
-            this.ScatterGraphic.addChild(scaleLabelY);
-            slx.string = lerp(this.scatterRange.left, this.scatterRange.right, (scaleLabelListX[i] + 620) / 600.0).toFixed(2).toString();   
+            this.ScaleGraphic.addChild(scaleLabelX);
+            this.ScaleGraphic.addChild(scaleLabelY);
+            slx.string = lerp(this.scatterRange.left, this.scatterRange.right, (scaleLabelListX[i] - renderRect.left) / this.axisLength).toFixed(2).toString();   
 
-            sly.string = lerp(this.scatterRange.bottom, this.scatterRange.top, (scaleLabelListY[i] + 300) / 600.0).toFixed(2).toString();   
+            sly.string = lerp(this.scatterRange.bottom, this.scatterRange.top, (scaleLabelListY[i] - renderRect.bottom) / this.axisLength).toFixed(2).toString();   
             slx.fontSize = 10;
             sly.fontSize = 10;
             slx.lineHeight = 10;
             sly.lineHeight = 10;
             slx.color.fromHEX('#eeeeee');
             sly.color.fromHEX('#eeeeee');
-            scaleLabelX.setPosition(new Vec3(scaleLabelListX[i], -10, 0));
-            scaleLabelY.setPosition(new Vec3(-340, scaleLabelListY[i], 0));
-            scaleLabelX.layer = this.ScatterGraphic.layer;
-            scaleLabelY.layer = this.ScatterGraphic.layer;
+            scaleLabelX.setPosition(new Vec3(scaleLabelListX[i], originPos.y - 10, 0));
+            scaleLabelY.setPosition(new Vec3(originPos.x - 20, scaleLabelListY[i], 0));
+            scaleLabelX.layer = this.ScaleGraphic.layer;
+            scaleLabelY.layer = this.ScaleGraphic.layer;
         }
 
-        // this.graph.close();
-        this.scatterGraph.stroke();
+        this.scaleGraph.stroke();
     }
 
-    private drawScatter() {
+    private drawScatter(renderRect: RectSize) {
         this.scatterGraph.lineWidth = 0;
         this.scatterWidth = this.scatterRange.right - this.scatterRange.left;
         this.scatterHeight = this.scatterRange.top - this.scatterRange.bottom;
 
-        for (let i = 0; i < 10; i++) {
+        for (let i = 0; i < this.tileNum; i++) {
             this.pointTree[i] = [];
-            for (let j = 0; j < 10; j++) {
+            for (let j = 0; j < this.tileNum; j++) {
                 this.pointTree[i][j] = [];
             }
         }
 
+        const height = Math.abs(renderRect.top - renderRect.bottom);
+        const width = height;
+
         for (let i = 0; i < this.data.length; i++) {
             const d = this.data[i];
-            d.pos = new Vec2((d.pos.x - this.scatterRange.left) * 600 / this.scatterWidth, 
-                (d.pos.y - this.scatterRange.bottom) * 600 / this.scatterHeight), // 缩放到0-600屏幕像素空间
+            d.pos = new Vec2((d.pos.x - this.scatterRange.left) * height / this.scatterWidth, 
+                (d.pos.y - this.scatterRange.bottom) * width / this.scatterHeight), // 缩放到0-width屏幕像素空间
 
-
-            this.pointTree[Math.min(Math.floor(d.pos.x / 60), 9)][Math.min(Math.floor(d.pos.y / 60), 9)].push(d);
+            this.pointTree[Math.min(Math.floor(d.pos.x / this.tileLength), this.tileNum - 1)][Math.min(Math.floor(d.pos.y / this.tileLength), this.tileNum - 1)].push(d);
             
             this.scatterGraph.fillColor.fromHEX(type2Color[d.type]);
-            this.scatterGraph.circle(d.pos.x - 620, d.pos.y - 300, 2);
+            this.scatterGraph.circle(d.pos.x + renderRect.left, d.pos.y + renderRect.bottom, 2);
             this.scatterGraph.fill();
             this.scatterGraph.stroke();
         }
@@ -517,14 +524,12 @@ export class MainController extends Component {
     }
 
     private onTouchStart(e: EventTouch) {
-        // screen 1280 * 720
-        // pos range: (0, 0) - (1280, 720)
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
-            if (pos.x > 20 && pos.x < 620 && pos.y > 60 && pos.y < 660) {
+            if (pos.x > this.scatterRect.left && pos.x < this.scatterRect.right && pos.y > this.scatterRect.bottom && pos.y < this.scatterRect.top) {
                 this.isSelect = true;
-                pos.subtract2f(20, 60);
-                this.selectPos = pos;
+                pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
+                this.clickPos = pos;
 
                 // 只要点击散点界面就取消所有选中状态
                 // this.isSelectingOne = false;
@@ -567,27 +572,22 @@ export class MainController extends Component {
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
             if (this.isSelect) {
-                if (this.isMove && !this.isSelectCtrl) {
-                    pos.subtract2f(20, 60);
-                    pos.x = Math.min(Math.max(0, pos.x), 600);
-                    pos.y = Math.min(Math.max(0, pos.y), 600);
-                    const selectRange: rectSize = {
-                        left: Math.min(pos.x, this.selectPos.x),
-                        right: Math.max(pos.x, this.selectPos.x),
-                        bottom: Math.min(pos.y, this.selectPos.y),
-                        top: Math.max(pos.y, this.selectPos.y),
+                if (this.isMove && !this.isSelectCtrl) {    // 框选
+                    pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
+                    pos.x = Math.min(Math.max(0, pos.x), this.axisLength);
+                    pos.y = Math.min(Math.max(0, pos.y), this.axisLength);
+                    const selectRange: RectSize = {
+                        left: Math.min(pos.x, this.clickPos.x),
+                        right: Math.max(pos.x, this.clickPos.x),
+                        bottom: Math.min(pos.y, this.clickPos.y),
+                        top: Math.max(pos.y, this.clickPos.y),
                     }
-                    const selectZone: rectSize = {
-                        left: Math.floor(selectRange.left / 60),
-                        right: Math.min(Math.floor(selectRange.right / 60), 9),
-                        bottom: Math.floor(selectRange.bottom / 60),
-                        top: Math.min(Math.floor(selectRange.top / 60), 9),
+                    const selectZone: RectSize = {
+                        left: Math.floor(selectRange.left / this.tileLength),
+                        right: Math.min(Math.floor(selectRange.right / this.tileLength), this.tileNum - 1),
+                        bottom: Math.floor(selectRange.bottom / this.tileLength),
+                        top: Math.min(Math.floor(selectRange.top / this.tileLength), this.tileNum - 1),
                     }
-                    // while (this.selectNodeList.length > 0) {
-                    //     this.selectNodeList[this.selectNodeList.length - 1].destroy();
-                    //     this.selectNodeList.pop();
-
-                    // } 
                     for (let x = selectZone.left; x <= selectZone.right; x++) {
                         for (let y = selectZone.bottom; y <= selectZone.top; y++) {
                             if (x == selectZone.left || x == selectZone.right || y == selectZone.bottom || y == selectZone.top) {
@@ -596,18 +596,18 @@ export class MainController extends Component {
                                     const pointPos = pointList[i].pos;
                                     if (pointPos.x >= selectRange.left && pointPos.x <= selectRange.right && pointPos.y >= selectRange.bottom && pointPos.y <= selectRange.top) {
                                         const selectNode = instantiate(this.SelectNode);
-                                        this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
-                                        selectNode.setPosition(new Vec3(pointPos.x - 620, pointPos.y - 300, 0));
+                                        this.ScatterGraphic.addChild(selectNode);
+                                        selectNode.setPosition(new Vec3(pointPos.x + this.scatterRect.left, pointPos.y + this.scatterRect.bottom, 0));
                                         this.selectNodeList.push(selectNode);
                                         this.selectDataList.push(pointList[i].idx);
-                                    }
+                                    }   
                                 }
                             } else {
                                 const pointList = this.pointTree[x][y];
                                 for (let i = 0; i < pointList.length; i++) {
                                     const selectNode = instantiate(this.SelectNode);
-                                    this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
-                                    selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
+                                    this.ScatterGraphic.addChild(selectNode);
+                                    selectNode.setPosition(new Vec3(pointList[i].pos.x + this.scatterRect.left, pointList[i].pos.y + this.scatterRect.bottom, 0));
                                     this.selectNodeList.push(selectNode);
                                     this.selectDataList.push(pointList[i].idx);
                                     
@@ -625,17 +625,17 @@ export class MainController extends Component {
                             this.SelectRangeButtons.active = true;
                         }
                     }
-                } else {
-                    const tileX = Math.floor((pos.x - 20) / 60);
-                    const tileY = Math.floor((pos.y - 60) / 60);
+                } else {    // 点选
+                    const tileX = Math.floor((pos.x - this.scatterRect.left) / this.tileLength);
+                    const tileY = Math.floor((pos.y - this.scatterRect.bottom) / this.tileLength);
                     const pointList = this.pointTree[tileX][tileY];
-                    pos.subtract2f(20, 60);
+                    pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
                     for (let i = 0; i < pointList.length; i++) {
                         if (this.distanceVec2(pos, pointList[i].pos) < 3) {
                            
                             const selectNode = instantiate(this.SelectNode);
-                            this.UICanvas.getChildByName('InnerUI').addChild(selectNode);
-                            selectNode.setPosition(new Vec3(pointList[i].pos.x - 620, pointList[i].pos.y - 300, 0));
+                            this.ScatterGraphic.addChild(selectNode);
+                            selectNode.setPosition(new Vec3(pointList[i].pos.x + this.scatterRect.left, pointList[i].pos.y + this.scatterRect.bottom, 0));
                             this.selectNodeList.push(selectNode);
                             this.selectDataList.push(pointList[i].idx);
                             
@@ -664,9 +664,12 @@ export class MainController extends Component {
                 uv.x = Math.max(0, Math.min(uv.x, 1));
                 uv.y = Math.max(0, Math.min(uv.y, 1));
                 this.panelClickPos = uv;
-                if (!this.panelPosBoard)
-                    this.panelPosBoard = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPos').getComponent(Label);
-                this.panelPosBoard.string = `x=${uv.x}\ny=${uv.y}`;
+                if (!this.panelPosBoardX || !this.panelPosBoardY) {
+                    this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
+                    this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+                }
+                this.panelPosBoardX.string = `x=${uv.x}`;
+                this.panelPosBoardY.string = `x=${uv.y}`;
                 
                 if (PREVIEW)
                     console.log('panel uv:' + uv);
@@ -675,6 +678,7 @@ export class MainController extends Component {
 
         this.isMove = false;
         this.isSelect = false;
+        console.log('clear select ');
         this.selectGraph.clear();
     }
 
@@ -728,8 +732,9 @@ export class MainController extends Component {
                     i++;
                 });
                 this.scatterGraph.clear();
-                this.drawAxis();
-                this.drawScatter();
+                this.drawAxis(this.scatterRect);
+                this.drawAxisScale(this.scatterRect);
+                this.drawScatter(this.scatterRect);
                 this.isInitialize = true;
                 
             }  
