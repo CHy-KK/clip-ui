@@ -1,12 +1,12 @@
 import { Texture2D, Vec2, Node } from "cc";
 
 export type DataPoint = {
-    pos: Vec2;
+    dataPos: Vec2;
+    screenPos: Vec2;
     value: number;
     idx: number;    // 映射到原数组中的序号
     type: number;
     name: string;
-    img: Texture2D;
 };
 
 export type RectSize = {
