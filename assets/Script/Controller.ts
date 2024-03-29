@@ -48,7 +48,7 @@ export class MainController extends Component {
     public readonly HistoryBgGraphic: Node = null;
 
     @property(Node)
-    public readonly HistoryBgMask: Node = null;
+    public readonly InnerHistoryGraphic: Node = null;
 
     @property(Node)
     public readonly UICanvas: Node = null;
@@ -92,7 +92,8 @@ export class MainController extends Component {
     private scaleGraph: Graphics;       // 坐标轴刻度绘制（提供调整接口）
     private scatterGraph: Graphics;     // 散点图绘制（框选提供重绘接口）
     private selectGraph: Graphics;      // 选中区域绘制
-    private historyBgGraph: Graphics;
+    private historyBgGraph: Graphics;       // 外UI历史选中列表
+    private innerHistoryGraph: Graphics;    // 内UI历史选中列表
     private scatterRange: RectSize; // x-min, x-max, y-min, y-max
     private scatterWidth: number;
     private scatterHeight: number;
@@ -144,7 +145,7 @@ export class MainController extends Component {
         };
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
-        this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength, this.HistoryBgMask);
+        this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
         this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
         this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
         
@@ -153,6 +154,7 @@ export class MainController extends Component {
         this.scatterGraph = this.ScatterGraphic.getComponent(Graphics);
         this.selectGraph = this.SelectGraphic.getComponent(Graphics);
         this.historyBgGraph = this.HistoryBgGraphic.getComponent(Graphics);
+        this.innerHistoryGraph = this.InnerHistoryGraphic.getComponent(Graphics);
         this.scatterRect = {
             left: Math.min(this.scatterRectVec4.x, this.scatterRectVec4.y),
             right: Math.max(this.scatterRectVec4.x, this.scatterRectVec4.y),
@@ -161,21 +163,7 @@ export class MainController extends Component {
         }
         this.axisLength = this.scatterRect.right - this.scatterRect.left;
         this.tileLength = this.axisLength / this.tileNum;
-        this.historyBgGraph.fillColor.fromHEX('656565');
-        this.historyBgGraph.moveTo(150, 210);
-        this.historyBgGraph.lineTo(1130, 210);
-        this.historyBgGraph.lineTo(1180, 160);
-        this.historyBgGraph.lineTo(1180, 110);
-        this.historyBgGraph.lineTo(1130, 60);
-        this.historyBgGraph.lineTo(150, 60);
-        this.historyBgGraph.lineTo(100, 110);
-        this.historyBgGraph.lineTo(100, 160);
-        this.historyBgGraph.lineTo(150, 210);
-        this.historyBgGraph.arc(1130, 160, 50, angle2radian(90), angle2radian(0), false);
-        this.historyBgGraph.arc(1130, 110, 50, angle2radian(0), angle2radian(-90), false);
-        this.historyBgGraph.arc(150, 110, 50, angle2radian(-90), angle2radian(-180), false);
-        this.historyBgGraph.arc(150, 160, 50, angle2radian(-180), angle2radian(-270), false);
-        this.historyBgGraph.fill();
+        
 
         this.selectGraph.lineWidth = 2;
         this.selectGraph.strokeColor.fromHEX('ee0000');
@@ -192,14 +180,6 @@ export class MainController extends Component {
         }
         
         /************* test code *************/
-        type DataPoint = {
-            pos: Vec2;
-            value: number;
-            idx: number;    // 映射到原数组中的序号
-            type: number;
-            name: string;
-            img: Texture2D;
-        };
         for (let i = 0; i < 1000; i++) {
             this.data.push({
                 dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
@@ -225,7 +205,7 @@ export class MainController extends Component {
             this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
             this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
         })
-
+        this.drawHistoryBg();
         this.drawAxis(this.scatterRect);
         this.drawAxisScale(this.scatterRect, this.scatterRange);
         this.drawScatter(this.scatterRect, this.scatterRange);
@@ -272,9 +252,44 @@ export class MainController extends Component {
             } else {
                 this.node.emit(SNAPSHOT_FOR_NEW_VOXEL_EVENT, { id: this.snapShotId });
                 this.isSnapShotReady = SnapShotState.None;
-                // this.voxelDataHistory.setSnapShotReadyById(this.snapShotId);
             }
         }
+    }
+
+    private drawHistoryBg() {
+        // OutterUI history background
+        this.historyBgGraph.fillColor.fromHEX('656565');
+        this.historyBgGraph.moveTo(150, 210);
+        this.historyBgGraph.lineTo(1130, 210);
+        this.historyBgGraph.lineTo(1180, 160);
+        this.historyBgGraph.lineTo(1180, 110);
+        this.historyBgGraph.lineTo(1130, 60);
+        this.historyBgGraph.lineTo(150, 60);
+        this.historyBgGraph.lineTo(100, 110);
+        this.historyBgGraph.lineTo(100, 160);
+        this.historyBgGraph.lineTo(150, 210);
+        this.historyBgGraph.arc(1130, 160, 50, angle2radian(90), angle2radian(0), false);
+        this.historyBgGraph.arc(1130, 110, 50, angle2radian(0), angle2radian(-90), false);
+        this.historyBgGraph.arc(150, 110, 50, angle2radian(-90), angle2radian(-180), false);
+        this.historyBgGraph.arc(150, 160, 50, angle2radian(-180), angle2radian(-270), false);
+        this.historyBgGraph.fill();
+
+        // InnerUI history background
+        this.innerHistoryGraph.fillColor.fromHEX('656565');
+        this.innerHistoryGraph.moveTo(-20, -300);
+        this.innerHistoryGraph.lineTo(10, -330);
+        this.innerHistoryGraph.lineTo(50, -330);
+        this.innerHistoryGraph.lineTo(80, -300);
+        this.innerHistoryGraph.lineTo(80, 210);
+        this.innerHistoryGraph.lineTo(50, 240);
+        this.innerHistoryGraph.lineTo(10, 240);
+        this.innerHistoryGraph.lineTo(-20, 210);
+        this.innerHistoryGraph.lineTo(-20, -300);
+        this.innerHistoryGraph.arc(10, -300, 30, angle2radian(-90), angle2radian(-180), false);
+        this.innerHistoryGraph.arc(50, -300, 30, angle2radian(0), angle2radian(-90), false);
+        this.innerHistoryGraph.arc(50, 210, 30, angle2radian(90), angle2radian(0), false);
+        this.innerHistoryGraph.arc(10, 210, 30, angle2radian(180), angle2radian(90), false);
+        this.innerHistoryGraph.fill();
     }
 
    
@@ -464,42 +479,7 @@ export class MainController extends Component {
         voxelTexture.updateImage();
         snapshot.texture = voxelTexture;
         this.voxelDataHistory.setSnapShot(snapshot);
-        
-        // const spriteNode = new Node();
-        // const ssn = spriteNode.addComponent(SnapShotNode);
-        // ssn.vid = msg.id;
-        // spriteNode.layer = this.HistoryBgMask.layer;
-        // spriteNode.setScale(new Vec3(1, -1, 1));
-
-        // const sp = spriteNode.addComponent(Sprite);
-        // sp.spriteFrame = snapshot;
-        // const idLabel = new Node();
-        // idLabel.layer = this.HistoryBgMask.layer;
-        // const il = idLabel.addComponent(Label);
-        // il.string = msg.id;
-        // il.fontSize = 20;
-        // spriteNode.addChild(idLabel);
-        // idLabel.setPosition(new Vec3(0, 70, 0));
-        // idLabel.setScale(new Vec3(1, -1, 1));
-
-        
-        // this.HistoryBgMask.addChild(spriteNode);
-        // spriteNode.getComponent(UITransform).contentSize.set(100, 100);
-        // const childList = this.HistoryBgMask.children;
-        // if (childList.length > this.historyMaxLength) {
-        //     const chtail = childList[0];
-        //     this.HistoryBgMask.removeChild(childList[0]);
-        //     const sp = chtail.getComponent(Sprite).spriteFrame;
-        //     if (sp.refCount <= 1) {
-        //         sp.destroy();
-        //     }
-        //     chtail.destroy();
-        // }
-        // let xpos = 0;   
-        // for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
-        //     childList[i].position = new Vec3(xpos, 15, 0);
-        // }
-        // this.HistoryBgMask.setPosition(new Vec3(440, 0, 0));
+    
         this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
     }
 

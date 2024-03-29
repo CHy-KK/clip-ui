@@ -12,15 +12,15 @@ export class VoxelHistoryQueue {
 
     private rawVoxelDataHistory: Queue<Vec3[]>; 
     private voxelIdxHistory: Queue<VoxelRecord>;
-    private HistoryListNode: Node = null;
+    private outHistoryListNode: Node = null;
+    private innerHistoryListNode: Node = null;
     private maxLength: number;
 
-    constructor(maxlength: number, bg: Node) {
+    constructor(maxlength: number) {
         this.rawVoxelDataHistory = new Queue<Vec3[]>(maxlength);
         this.voxelIdxHistory = new Queue<VoxelRecord>(maxlength);
-        // this.HistoryListNode = bg;
-        this.HistoryListNode = director.getScene().getChildByPath('mainUI/OutUI/stencilMask/HistoryList');
-        console.log(this.HistoryListNode);
+        this.outHistoryListNode = director.getScene().getChildByPath('mainUI/OutUI/stencilMask/HistoryList');
+        this.innerHistoryListNode = director.getScene().getChildByPath('mainUI/InnerUI/InnerHistoryGraphic/stencilMask/HistoryList');
         this.maxLength = maxlength;
     }
 
@@ -54,6 +54,59 @@ export class VoxelHistoryQueue {
     //         return;
     //     this.voxelIdxHistory.setElement(idx, {vid: id, snapShotState: true});
     // }
+    private pushSprite(id: string) {
+        // 创建snapShotNode
+        const spriteNodeO = new Node();
+        const spriteNodeI = new Node();
+        const ssnO = spriteNodeO.addComponent(SnapShotNode);
+        const ssnI = spriteNodeI.addComponent(SnapShotNode);
+        ssnO.vid = id;
+        ssnI.vid = id;
+        spriteNodeO.layer = this.outHistoryListNode.layer;
+        spriteNodeI.layer = spriteNodeO.layer;
+        spriteNodeO.setScale(new Vec3(1, -1, 1));
+        spriteNodeI.setScale(new Vec3(1, -1, 1));
+
+        const spO = spriteNodeO.addComponent(Sprite);
+        const spI = spriteNodeI.addComponent(Sprite);
+        // 等待后续赋值
+        spO.spriteFrame = null;
+        spI.spriteFrame = null;
+        const idLabelO = new Node();
+        const idLabelI = new Node();
+        idLabelO.layer = this.outHistoryListNode.layer;
+        idLabelI.layer = idLabelO.layer;
+        const ilO = idLabelO.addComponent(Label);
+        const ilI = idLabelI.addComponent(Label);
+        ilO.string = id;
+        ilI.string = id;
+        ilO.fontSize = 15;
+        ilI.fontSize = 10;
+        ilO.lineHeight = 15;
+        ilI.lineHeight = 10;
+        ilO.overflow = Overflow.RESIZE_HEIGHT;
+        ilI.overflow = Overflow.RESIZE_HEIGHT;
+        spriteNodeO.addChild(idLabelO);
+        spriteNodeI.addChild(idLabelI);
+        idLabelO.setPosition(new Vec3(0, 60, 0));
+        idLabelI.setPosition(new Vec3(0, 50, 0));
+        idLabelO.setScale(new Vec3(1, -1, 1));
+        idLabelI.setScale(new Vec3(1, -1, 1));
+
+        
+        this.outHistoryListNode.addChild(spriteNodeO);
+        this.innerHistoryListNode.addChild(spriteNodeI);
+        let xpos = 0;   
+        let ypos = 0;
+        const childListO = this.outHistoryListNode.children;
+        const childListI = this.innerHistoryListNode.children;
+        for (let i = childListO.length - 1; i >= 0; i--, xpos -= 120, ypos -= 110) {
+            childListO[i].position = new Vec3(xpos, 15, 0);
+            childListI[i].position = new Vec3(0, ypos, 0);
+        }
+        this.outHistoryListNode.setPosition(new Vec3(440, 0, 0));
+        this.innerHistoryListNode.setPosition(new Vec3(0, 215, 0));
+    }
 
     public push(voxel: Vec3[], id: string, idx: number, sss: boolean = false): boolean {
         if (this.isExist(id) != -1)
@@ -61,51 +114,24 @@ export class VoxelHistoryQueue {
         
         if (this.voxelIdxHistory.push({ vid: id, idxInData: idx, snapShotState: sss })) {
             this.rawVoxelDataHistory.push(voxel);
-
-            // 创建snapShotNode
-            const spriteNode = new Node();
-            const ssn = spriteNode.addComponent(SnapShotNode);
-            ssn.vid = id;
-            spriteNode.layer = this.HistoryListNode.layer;
-            spriteNode.setScale(new Vec3(1, -1, 1));
-
-            const sp = spriteNode.addComponent(Sprite);
-            // 等待后续赋值
-            sp.spriteFrame = null;
-            const idLabel = new Node();
-            idLabel.layer = this.HistoryListNode.layer;
-            const il = idLabel.addComponent(Label);
-            il.string = id;
-            il.fontSize = 20;
-            il.lineHeight = 20;
-            il.overflow = Overflow.RESIZE_HEIGHT;
-            spriteNode.addChild(idLabel);
-            idLabel.setPosition(new Vec3(0, 70, 0));
-            idLabel.setScale(new Vec3(1, -1, 1));
-
-            
-            this.HistoryListNode.addChild(spriteNode);
-            let xpos = 0;   
-            const childList = this.HistoryListNode.children;
-            for (let i = childList.length - 1; i >= 0; i--, xpos -= 120) {
-                childList[i].position = new Vec3(xpos, 15, 0);
-            }
-            this.HistoryListNode.setPosition(new Vec3(440, 0, 0));
-             
+            this.pushSprite(id);
             return true;
         }
         return false;
     }
 
     public setSnapShot(sf: SpriteFrame) {
-        const childList = this.HistoryListNode.children;
-        childList[childList.length - 1].getComponent(Sprite).spriteFrame = sf;
-        childList[childList.length - 1].getComponent(UITransform).contentSize.set(100, 100);
+        const childListO = this.outHistoryListNode.children;
+        childListO[childListO.length - 1].getComponent(Sprite).spriteFrame = sf;
+        childListO[childListO.length - 1].getComponent(UITransform).contentSize.set(100, 100);
+        const childListI = this.innerHistoryListNode.children;
+        childListI[childListI.length - 1].getComponent(Sprite).spriteFrame = sf;
+        childListI[childListI.length - 1].getComponent(UITransform).contentSize.set(80, 80);
     }
 
     public getSnapShotById(id: string) {
         const idx = this.isExist(id);
-        return this.HistoryListNode.children[idx].getComponent(Sprite).spriteFrame;
+        return this.outHistoryListNode.children[idx].getComponent(Sprite).spriteFrame;
     }
 
     public getIdxInDataById(id: string): number {
@@ -117,15 +143,15 @@ export class VoxelHistoryQueue {
         this.rawVoxelDataHistory.popHead();
         this.voxelIdxHistory.popHead();
 
-        const childList = this.HistoryListNode.children;
-        if (childList.length > this.maxLength) {
-            const chtail = childList[0];
-            this.HistoryListNode.removeChild(childList[0]);
-            const sp = chtail.getComponent(Sprite).spriteFrame;
-            if (sp.refCount <= 1) {
-                sp.destroy();
-            }
-            chtail.destroy();
+        const childListO = this.outHistoryListNode.children;
+        const childListI = this.innerHistoryListNode.children;
+        if (childListO.length > this.maxLength) {
+            const chtailO = childListO[0];
+            const chtailI = childListI[0];
+            this.outHistoryListNode.removeChild(childListO[0]);
+            this.innerHistoryListNode.removeChild(childListI[0]);
+            chtailO.destroy();
+            chtailI.destroy();
         }
     }
 
