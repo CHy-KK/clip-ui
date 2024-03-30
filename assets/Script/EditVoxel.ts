@@ -9,27 +9,19 @@ export class EditVoxel extends Component {
     private isRotating: boolean = false;
 
     onEnable () {
-        // input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
-        // input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);  
         input.on(Input.EventType.KEY_DOWN, this.onkeyDown, this);
         input.on(Input.EventType.KEY_UP, this.onkeyUp, this);
     }
 
     onDisable () {
-        // input.off(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
-        // input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
         input.off(Input.EventType.KEY_DOWN, this.onkeyDown, this);
         input.off(Input.EventType.KEY_UP, this.onkeyUp, this);
     }
     
     start() {
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        // Quat.
-        // this.node.rotate(new Quat(angle2radian(45)));
-        // let qua = new Quat();
-        // Quat.fromAxisAngle()
     }
 
     update(deltaTime: number) {

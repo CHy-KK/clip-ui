@@ -1,6 +1,6 @@
 import { Sprite, Texture2D, Vec3, Node, Label, UITransform, director, SpriteFrame, Overflow } from "cc";
 import { PREVIEW } from "cc/env";
-import { SnapShotNode } from "../SnapShotNode";
+import { InOrOut, SnapShotNode } from "../SnapShotNode";
 
 export type VoxelRecord = {
     vid: string,
@@ -61,7 +61,9 @@ export class VoxelHistoryQueue {
         const ssnO = spriteNodeO.addComponent(SnapShotNode);
         const ssnI = spriteNodeI.addComponent(SnapShotNode);
         ssnO.vid = id;
+        ssnO.inout = InOrOut.Out;
         ssnI.vid = id;
+        ssnO.inout = InOrOut.In;
         spriteNodeO.layer = this.outHistoryListNode.layer;
         spriteNodeI.layer = spriteNodeO.layer;
         spriteNodeO.setScale(new Vec3(1, -1, 1));

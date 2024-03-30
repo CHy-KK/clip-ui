@@ -123,7 +123,7 @@ export class MainController extends Component {
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
-    public drawEditVoxelIdBuffer: string = '';
+    public drawEditVoxelIdBuffer: string = '';  // 这玩意好像没用，可以考虑删
     private panelClickPos: Vec2 = new Vec2(0);
     private isPanel: boolean = false;
     // private drawEditLock: LockAsync = new LockAsync();
@@ -447,7 +447,7 @@ export class MainController extends Component {
         return vc;
     }
 
-    private renderVoxelSelect(id: string) {
+    public renderVoxelSelect(id: string) {
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
         for (; i < voxelData.length; i++) {

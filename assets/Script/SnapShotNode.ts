@@ -2,9 +2,15 @@ import { _decorator, Button, Component, director, EventHandler, input, Label, No
 import { DRAW_EDIT_VOXEL_EVENT, MainController } from './Controller';
 const { ccclass, property } = _decorator;
 
+export enum InOrOut {
+    In = 0,
+    Out = 1,
+}
+
 @ccclass('SnapShotNode')
 export class SnapShotNode extends Component {
     public vid: string = '';
+    public inout: InOrOut = InOrOut.In;   // false: Inner UI, true: Out UI
     private controller: MainController = null;
     private button: Button = null;
 
@@ -24,11 +30,13 @@ export class SnapShotNode extends Component {
     private onClick() {
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        if (this.controller.isOutUI()) {
-            console.log('button ' + this.vid + ' is clicked');
-            this.controller.drawEditVoxelIdBuffer = this.vid;
-            this.controller.onDrawEditVoxel(this.vid);
-            // this.controller.node.emit(DRAW_EDIT_VOXEL_EVENT, this.vid);
+        if (this.inout) {
+            if (this.controller.isOutUI()) {
+                this.controller.drawEditVoxelIdBuffer = this.vid;
+                this.controller.onDrawEditVoxel(this.vid);
+            }
+        } else {
+            this.controller.renderVoxelSelect(this.vid);
         }
     }
 }
