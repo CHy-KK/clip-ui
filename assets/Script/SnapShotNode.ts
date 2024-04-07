@@ -36,7 +36,7 @@ export class SnapShotNode extends Component {
                 this.controller.onDrawEditVoxel(this.vid);
             }
         } else {
-            this.controller.renderVoxelSelect(this.vid);
+            this.controller.renderVoxelSelect(this.vid, false);
         }
     }
 }

@@ -27,7 +27,7 @@ export class MaskSlide extends Component {
     public readonly tailPos: Vec2 = new Vec2();
 
     @property({tooltip: '0: innerUI, 1: outUI'})
-    public readonly inout: InOrOut = InOrOut.In;
+    public inout: InOrOut = InOrOut.In;
 
     @property(Vec4)
     public readonly maskZoneVec: Vec4 = new Vec4();
@@ -163,10 +163,11 @@ export class MaskSlide extends Component {
     
 
     onTouchStart(e: EventTouch) {
+        console.log(this.controller?.isOutUI() ? 'out' : 'in');
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         const pos: Vec2 = e.touch.getUILocation();
-        if ((this.controller?.isOutUI() ? 0 : 1 ^ this.inout) && pos.x >= this.maskZone.left && pos.x <= this.maskZone.right && pos.y >= this.maskZone.bottom && pos.y <= this.maskZone.top) {
+        if (((this.controller?.isOutUI() ? 0 : 1) ^ this.inout) && pos.x >= this.maskZone.left && pos.x <= this.maskZone.right && pos.y >= this.maskZone.bottom && pos.y <= this.maskZone.top) {
             const childList = this.node.children;
             const posChdHead = new Vec2(childList[childList.length - 1].position.x, childList[childList.length - 1].position.y);
             const posChdTail = new Vec2(childList[0].position.x, childList[0].position.y);

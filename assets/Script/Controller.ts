@@ -1,10 +1,11 @@
-import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Overflow, Prefab, random, randomRange, randomRangeInt, renderer, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
-import { PREVIEW } from 'cc/env';
+import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Overflow, Prefab, Quat, quat, random, randomRange, randomRangeInt, renderer, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+// import `native` from 'cc'
+import { PREVIEW, NATIVE } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
 import { SnapShotNode } from './SnapShotNode';
 import { LockAsync } from './Utils/Lock';
 import { PanelNode } from './PanelNode';
-import { DataPoint, RectSize, VoxelBuffer, SelectingType, SnapShotState, voxelScale, type2Color, RequestName, angle2radian } from './Utils/Utils';
+import { DataPoint, RectSize, VoxelBuffer, SelectingType, SnapShotState, voxelScale, type2Color, RequestName, angle2radian, ClickState } from './Utils/Utils';
 const { ccclass, property } = _decorator;
 
 const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
@@ -101,6 +102,7 @@ export class MainController extends Component {
     // private selectNodeList: Node[] = [];
     private selectDataList: number[] = []   //  记录本次选中的点在原数据点列表中的下标
     private quadPanelPos: RectSize;
+    private quadShowSelect: RectSize;
     private voxelList: VoxelBuffer = {
         Select: [],
         Edit: []
@@ -112,31 +114,34 @@ export class MainController extends Component {
     private scatterRect: RectSize;
     private axisLength: number;
     private tileLength: number;
+    private voxelRead: HTMLInputElement = null;
+    private voxelDownLoadLink: HTMLAnchorElement = null;
 
     // 交互数据
     private isInitialize: boolean = false;
     private clickPos: Vec2 = new Vec2(0);
     private selectMovingPos: Vec2 =  new Vec2(0);
     private isMove: boolean = false;
-    private isSelect: boolean = false;
     private isSelectCtrl: boolean = false;
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
     public drawEditVoxelIdBuffer: string = '';  // 这玩意好像没用，可以考虑删
     private panelClickPos: Vec2 = new Vec2(0);
-    private isPanel: boolean = false;
+    // private isSelect: boolean = false;
+    // private isPanel: boolean = false;
+    // private isRotateSelectVoxel: boolean = false;
+    private clickState: ClickState = 0;
+    private curSelectVoxelId: string = '';  //  当前innerUI显示在select区域的体素id
+    private curEditVoxelId: string = '';    //  当亲outUI显示在编辑区域的体素id 
     // private drawEditLock: LockAsync = new LockAsync();
 
-    // private isSelectingOne: boolean = false;
-    // private isSelectingRange: boolean = false;
-    // private isSelectingMulti: boolean = false;
-
     start() {
-        // Initialize
+        // 界面初始化
         this.canvasSize.x = this.UICanvas.getComponent(UITransform).contentSize.x;
         this.canvasSize.y = this.UICanvas.getComponent(UITransform).contentSize.y;
-        const quadPanel = this.UICanvas.getChildByName('InnerUI').getChildByName('quadPanel');
+        // 计算rgb调色盘区域坐标
+        const quadPanel = this.UICanvas.getChildByPath('InnerUI/quadPanel');
         this.quadPanelPos = {
             right: this.canvasSize.x - quadPanel.getComponent(Widget).right,
             top: this.canvasSize.y - quadPanel.getComponent(Widget).top,
@@ -145,10 +150,24 @@ export class MainController extends Component {
         };
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
-        this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
         this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
         this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
-        
+
+        // 计算显示select界面区域坐标
+        const quadSelct = this.UICanvas.getChildByPath('InnerUI/ShowSelectVoxelScreen');
+        this.quadShowSelect = {
+            right: this.canvasSize.x - quadSelct.getComponent(Widget).right,
+            bottom: quadSelct.getComponent(Widget).bottom,
+            left: 0, 
+            top: 0
+        }
+        this.quadShowSelect.left = this.quadShowSelect.right - quadSelct.getComponent(UITransform).contentSize.x;
+        this.quadShowSelect.top = this.quadShowSelect.bottom + quadSelct.getComponent(UITransform).contentSize.y;
+
+        // 初始化历史队列
+        this.voxelDataHistory = new VoxelHistoryQueue(this.historyMaxLength);
+
+        // 初始化绘图界面
         this.axisGraph = this.AxisGraphic.getComponent(Graphics);
         this.scaleGraph = this.ScaleGraphic.getComponent(Graphics);
         this.scatterGraph = this.ScatterGraphic.getComponent(Graphics);
@@ -168,7 +187,7 @@ export class MainController extends Component {
         this.selectGraph.lineWidth = 2;
         this.selectGraph.strokeColor.fromHEX('ee0000');
 
-        // 对每个体素列表预生成32 * 32 * 32个cube
+        // 初始化体素，对每个体素列表预生成32 * 32 * 32个cube
         for (let i = 32 * 32 * 32; i >= 0; i--) {
             const sv = this.createVoxel(voxelScale.Select);
             this.voxelList.Select.push(sv);
@@ -179,6 +198,25 @@ export class MainController extends Component {
             this.VoxelNodeEdit.addChild(ev);
         }
         
+        // 体素文件读取HTML元素初始化
+        this.voxelDownLoadLink = document.createElement("a");
+        this.voxelRead = document.createElement('input');
+        this.voxelRead.setAttribute('type', 'file');
+        this.voxelRead.addEventListener('change', (event) => {  
+            console.log('file input!!');
+            const file = (event.target as HTMLInputElement).files[0]
+            console.log(file);  
+            const reader = new FileReader();  
+            reader.onload = (e) => {  
+                const fileData = e.target.result; 
+                console.log(fileData);
+                const vd = [new Vec3()];
+                this.sendVoxelToServer(vd);
+            };  
+            reader.readAsText(file);  
+
+        }); 
+
         /************* test code *************/
         for (let i = 0; i < 1000; i++) {
             this.data.push({
@@ -221,7 +259,6 @@ export class MainController extends Component {
         input.on(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.on(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
         input.on(Input.EventType.TOUCH_END, this.onTouchEnd, this);  
-        // this.node.on(DRAW_EDIT_VOXEL_EVENT, this.onDrawEditVoxel, this);
     }
 
     onDisable () {
@@ -231,11 +268,10 @@ export class MainController extends Component {
         input.off(Input.EventType.TOUCH_START, this.onTouchStart, this);
         input.off(Input.EventType.TOUCH_MOVE, this.onTouchMove, this);
         input.off(Input.EventType.TOUCH_END, this.onTouchEnd, this);
-        // this.node.off(DRAW_EDIT_VOXEL_EVENT, this.onDrawEditVoxel, this);
     }
 
     update(deltaTime: number) {
-        if (this.isInitialize && this.isSelect && this.isMove && !this.isSelectCtrl) {
+        if (this.isInitialize && this.clickState === ClickState.Scatter && this.isMove && !this.isSelectCtrl) {
             this.selectGraph.clear();
             this.selectGraph.moveTo(this.clickPos.x + this.scatterRect.left, this.clickPos.y + this.scatterRect.bottom);
             this.selectGraph.lineTo(this.selectMovingPos.x, this.clickPos.y + this.scatterRect.bottom);
@@ -447,7 +483,9 @@ export class MainController extends Component {
         return vc;
     }
 
-    public renderVoxelSelect(id: string) {
+    // 标识当前
+    public renderVoxelSelect(id: string, needSnapShot: boolean) {
+        this.VoxelNodeSelect.setRotationFromEuler(new Vec3(0, 0, 0));
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
         for (; i < voxelData.length; i++) {
@@ -465,8 +503,11 @@ export class MainController extends Component {
             this.voxelList.Select[i++].active = false;
         }
 
-        this.isSnapShotReady = SnapShotState.wait1frame;
-        this.snapShotId = id;
+        this.curSelectVoxelId = id;
+        if (needSnapShot) {
+            this.isSnapShotReady = SnapShotState.wait1frame;
+            this.snapShotId = id;
+        }
     }
 
     private snapShotVoxel = (msg) => {
@@ -498,7 +539,7 @@ export class MainController extends Component {
             this.isInnerUI = !this.isInnerUI;
             op.opacity = this.isInnerUI ? 255 : 0;
         } else if (this.isInnerUI) {
-            if (key.keyCode === KeyCode.CTRL_LEFT && !this.isSelect && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
+            if (key.keyCode === KeyCode.CTRL_LEFT && this.clickState === ClickState.None && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
                 // 按住左ctrl多次选点
                 this.isSelectCtrl = true;
             }
@@ -508,8 +549,12 @@ export class MainController extends Component {
                 if (this.voxelDataHistory.isExist(id) === -1) {
                     if (this.voxelDataHistory.length() === this.historyMaxLength)
                         this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push([new Vec3(0, 0, 0)], id, parseInt(id));
-                    this.snapShotVoxel({id: id});
+                    const vd = [];
+                    for (let i = randomRangeInt(100, 5000); i >= 0; i--)
+                        vd.push(new Vec3(randomRangeInt(-32, 32), randomRangeInt(-32, 32), randomRangeInt(-32, 32)));
+                    this.voxelDataHistory.push(vd, id, parseInt(id));
+                    this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+                    this.renderVoxelSelect(id, true);
                 }
             }
         } 
@@ -534,19 +579,15 @@ export class MainController extends Component {
     }
 
     private onTouchStart(e: EventTouch) {
+        if(PREVIEW)
+            console.log('click!!');
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
             if (pos.x > this.scatterRect.left && pos.x < this.scatterRect.right && pos.y > this.scatterRect.bottom && pos.y < this.scatterRect.top) {
-                this.isSelect = true;
+                this.clickState = ClickState.Scatter;
                 pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
                 this.clickPos = pos;
 
-                // 只要点击散点界面就取消所有选中状态
-                // this.isSelectingOne = false;
-                // this.isSelectingRange = false;
-                // if (!this.isSelectCtrl) {
-                //     this.isSelectingMulti = false;
-                // }
                 if (this.selectType != SelectingType.Multi || !this.isSelectCtrl) {
                     this.selectType = SelectingType.None;
                     this.SelectMultiButtons.active = false;
@@ -557,18 +598,14 @@ export class MainController extends Component {
                 if (!this.isSelectCtrl) {
                     this.SelectGraphic.destroyAllChildren();
                     while (!this.isSelectCtrl && this.selectDataList.length > 0) {
-                        // this.selectNodeList[this.selectNodeList.length - 1].destroy();
-                        // this.selectNodeList.pop();
                         this.selectDataList.pop();
                     } 
                 }
-                // while (!this.isSelectCtrl && this.selectNodeList.length > 0) {
-                //     this.selectNodeList[this.selectNodeList.length - 1].destroy();
-                //     this.selectNodeList.pop();
-                //     this.selectDataList.pop();
-                // } 
+            
             } else if (pos.x > this.quadPanelPos.left && pos.x < this.quadPanelPos.right && pos.y > this.quadPanelPos.bottom && pos.y < this.quadPanelPos.top) {
-                this.isPanel = true;
+                this.clickState = ClickState.Panel;
+            } else if (pos.x > this.quadShowSelect.left && pos.x < this.quadShowSelect.right && pos.y > this.quadShowSelect.bottom && pos.y < this.quadShowSelect.top) {
+                this.clickState = ClickState.ShowSelect;
             }
         }
         
@@ -576,37 +613,45 @@ export class MainController extends Component {
 
     private onTouchMove(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
+        if (PREVIEW)
+            console.log(this.clickState);
         if (this.isInnerUI) {              // ui交互事件
-            if (PREVIEW)
-                console.log('moving');
             this.isMove = true;
-            if (this.isSelect) {
-                this.selectMovingPos = pos;
-            } else if (this.isPanel) {
-                const panelWidth = (this.quadPanelPos.right - this.quadPanelPos.left);
-                let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
-                    (pos.y - this.quadPanelPos.bottom) / panelWidth);
-                uv.x = Math.max(0, Math.min(uv.x, 1));
-                uv.y = Math.max(0, Math.min(uv.y, 1));
-                this.panelClickPos = uv;
-                if (!this.panelPosBoardX || !this.panelPosBoardY) {
-                    this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
-                    this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
-                }
-                this.panelPosBoardX.string = `x=${uv.x}`;
-                this.panelPosBoardY.string = `y=${uv.y}`;
-                const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
-                touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
+            switch(this.clickState) {
+                case ClickState.Scatter: 
+                    this.selectMovingPos = pos;
+                    break;
+
+                case ClickState.Panel:
+                    const panelWidth = (this.quadPanelPos.right - this.quadPanelPos.left);
+                    let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
+                        (pos.y - this.quadPanelPos.bottom) / panelWidth);
+                    uv.x = Math.max(0, Math.min(uv.x, 1));
+                    uv.y = Math.max(0, Math.min(uv.y, 1));
+                    this.panelClickPos = uv;
+                    if (!this.panelPosBoardX || !this.panelPosBoardY) {
+                        this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
+                        this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+                    }
+                    this.panelPosBoardX.string = `x=${uv.x}`;
+                    this.panelPosBoardY.string = `y=${uv.y}`;
+                    const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
+                    touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
+                    break;
+                
+                case ClickState.ShowSelect:
+                    const deltaMove: Vec2 = (e.getDelta()).multiplyScalar(0.5);
+                    this.VoxelNodeSelect.rotate(Quat.fromEuler(new Quat(), -deltaMove.y, deltaMove.x, 0), 1);
+                    break;
+                
             }
-        } else {                        // 3d体素交互事件
-            
         }
     }
 
     private onTouchEnd(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
-            if (this.isSelect) {
+            if (this.clickState === ClickState.Scatter) {
                 if (this.isMove && !this.isSelectCtrl) {    // 框选
                     pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
                     pos.x = Math.min(Math.max(0, pos.x), this.axisLength);
@@ -696,7 +741,7 @@ export class MainController extends Component {
                     }
                     // else
                 } 
-            } else if (this.isPanel) {
+            } else if (this.clickState === ClickState.Panel) {
                 const panelWidth = this.quadPanelPos.right - this.quadPanelPos.left
                 let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
                     (pos.y - this.quadPanelPos.bottom) / panelWidth);
@@ -718,8 +763,10 @@ export class MainController extends Component {
         }
 
         this.isMove = false;
-        this.isSelect = false;
-        this.isPanel = false;
+        // this.isSelect = false;
+        // this.isPanel = false;
+        // this.isRotateSelectVoxel = false;
+        this.clickState = ClickState.None;
         console.log('clear select');
         this.selectGraph.clear();
     }
@@ -853,13 +900,14 @@ export class MainController extends Component {
         // TODO:这里的id最好还是用数据点的name
         // this.data[this.selectDataList[0]].name;
         const id = this.selectDataList[0].toString();
-        if (this.voxelDataHistory.isExist(id) === -1) {
+        const needSnapShot = this.voxelDataHistory.isExist(id) === -1;
+        if (needSnapShot) {
             this.getVoxelFromServer(id, this.selectDataList[0]);
             await this.waitUntilGetVoxelFnish();
             console.log('get voxel finished');
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
-        this.renderVoxelSelect(id);
+        this.renderVoxelSelect(id, needSnapShot);
     }
 
     public async onDrawEditVoxel(vid: string) {
@@ -945,14 +993,14 @@ export class MainController extends Component {
             + (idxList[3] === -1 ? '' : (this.data[idxList[3]].name + '-')) 
             + this.panelClickPos.x.toString() + '-' + this.panelClickPos.y.toString();
         
-        
-        if (this.voxelDataHistory.isExist(id) === -1) {
+        const needSnapShot = this.voxelDataHistory.isExist(id) === -1;
+        if (needSnapShot) {
             this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);
             await this.waitUntilGetVoxelFnish();
             console.log('get voxel finished');
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
-        this.renderVoxelSelect(id);
+        this.renderVoxelSelect(id, needSnapShot);
     }
 
     private clearAllStates() {
@@ -1026,7 +1074,25 @@ export class MainController extends Component {
         })
         this.drawAxisScale(this.scatterRect, sr);
         this.drawScatterIndex(this.scatterRect, sr, sampleList);
+    }
 
+    public onLoadVoxel() {
+        this.voxelRead.click();
+    }
+
+    private sendVoxelToServer(voxel: Vec3[]) {
+        return 0;
+    }
+
+    public onSaveVoxelToFile(type: string) {
+        const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(this.curSelectVoxelId);
+        const jsonStr = JSON.stringify(voxelData);
+        const textFileAsBlob = new Blob([jsonStr], { type: 'application/json' });
+        this.voxelDownLoadLink.download = 'voxel' + (type === 'select' ? this.curSelectVoxelId : this.curEditVoxelId);
+        if (window.webkitURL != null) {
+            this.voxelDownLoadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+        }
+        this.voxelDownLoadLink.click();
     }
 
 }

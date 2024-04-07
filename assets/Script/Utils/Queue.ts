@@ -63,7 +63,7 @@ export class VoxelHistoryQueue {
         ssnO.vid = id;
         ssnO.inout = InOrOut.Out;
         ssnI.vid = id;
-        ssnO.inout = InOrOut.In;
+        ssnI.inout = InOrOut.In;
         spriteNodeO.layer = this.outHistoryListNode.layer;
         spriteNodeI.layer = spriteNodeO.layer;
         spriteNodeO.setScale(new Vec3(1, -1, 1));

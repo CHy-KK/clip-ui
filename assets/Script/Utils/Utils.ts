@@ -42,6 +42,13 @@ export enum SnapShotState {
     ready = 2,
 };
 
+export enum ClickState {
+    None = 0,
+    Scatter = 1,
+    Panel = 2,
+    ShowSelect = 3
+}
+
 export const type2Color = [
     'ff0000',
     '00ff00',
