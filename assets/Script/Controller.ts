@@ -103,6 +103,7 @@ export class MainController extends Component {
     private selectDataList: number[] = []   //  记录本次选中的点在原数据点列表中的下标
     private quadPanelPos: RectSize;
     private quadShowSelect: RectSize;
+    // TODO: 这个voxelList完全没有存在的必要啊，直接用两个节点的children就可以了
     private voxelList: VoxelBuffer = {
         Select: [],
         Edit: []
