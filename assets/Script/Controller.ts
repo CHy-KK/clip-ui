@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Overflow, Prefab, Quat, quat, random, randomRange, randomRangeInt, renderer, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
+import { _decorator, Button, Color, Component, director, EventHandler, EventKeyboard, EventTouch, Graphics, ImageAsset, Input, input, instantiate, KeyCode, Label, lerp, Node, Overflow, Prefab, Quat, quat, random, randomRange, randomRangeInt, renderer, RenderTexture, SpringJoint2D, Sprite, SpriteFrame, Texture2D, UIOpacity, UITransform, ValueType, Vec2, Vec3, Vec4, Widget } from 'cc';
 // import `native` from 'cc'
 import { PREVIEW, NATIVE } from 'cc/env';
 import { Queue, VoxelHistoryQueue } from './Utils/Queue';
@@ -84,6 +84,10 @@ export class MainController extends Component {
     @property(Node)
     public readonly quadPanelNode: Node = null;
 
+    
+    public activeEditVoxelNum: number = 0;  // 记录当前voxel节点下active的数量，方便在编辑时控制体素的增删
+    public drawEditVoxelIdBuffer: string = '';  // 这玩意好像没用，可以考虑删
+
     private data: DataPoint[] = [];
     private dataRatio: number = 1;
     private typeDict: Map<string, number> = new Map();
@@ -104,10 +108,10 @@ export class MainController extends Component {
     private quadPanelPos: RectSize;
     private quadShowSelect: RectSize;
     // TODO: 这个voxelList完全没有存在的必要啊，直接用两个节点的children就可以了
-    private voxelList: VoxelBuffer = {
-        Select: [],
-        Edit: []
-    }
+    // private voxelList: VoxelBuffer = {
+    //     Select: [],
+    //     Edit: []
+    // }
     private isGetVoxelFinished: boolean = false;
     private voxelDataHistory: VoxelHistoryQueue;
     private panelPosBoardX: Label = null;
@@ -127,7 +131,6 @@ export class MainController extends Component {
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
-    public drawEditVoxelIdBuffer: string = '';  // 这玩意好像没用，可以考虑删
     private panelClickPos: Vec2 = new Vec2(0);
     // private isSelect: boolean = false;
     // private isPanel: boolean = false;
@@ -185,17 +188,18 @@ export class MainController extends Component {
         this.tileLength = this.axisLength / this.tileNum;
         
 
-        this.selectGraph.lineWidth = 2;
-        this.selectGraph.strokeColor.fromHEX('ee0000');
+        this.selectGraph.lineWidth = 1;
+        this.selectGraph.strokeColor.fromHEX('0099aa');
+        this.selectGraph.fillColor = new Color(0, 200, 200, 80);
 
         // 初始化体素，对每个体素列表预生成32 * 32 * 32个cube
         for (let i = 32 * 32 * 32; i >= 0; i--) {
             const sv = this.createVoxel(voxelScale.Select);
-            this.voxelList.Select.push(sv);
+            // this.voxelList.Select.push(sv);
             this.VoxelNodeSelect.addChild(sv);
             
             const ev = this.createVoxel(voxelScale.Edit);
-            this.voxelList.Edit.push(ev);
+            // this.voxelList.Edit.push(ev);
             this.VoxelNodeEdit.addChild(ev);
         }
         
@@ -279,6 +283,7 @@ export class MainController extends Component {
             this.selectGraph.lineTo(this.selectMovingPos.x, this.selectMovingPos.y);
             this.selectGraph.lineTo(this.clickPos.x + this.scatterRect.left, this.selectMovingPos.y);
             this.selectGraph.lineTo(this.clickPos.x + this.scatterRect.left, this.clickPos.y + this.scatterRect.bottom);
+            this.selectGraph.fill();
             this.selectGraph.stroke();
         }
 
@@ -477,7 +482,7 @@ export class MainController extends Component {
     }
 
     // TODO:设置体素的颜色等
-    private createVoxel(scale: number): Node {
+    public createVoxel(scale: number): Node {
         const vc = instantiate(this.VoxelCube);
         vc.scale.multiplyScalar(scale);
         vc.active = false;
@@ -489,19 +494,22 @@ export class MainController extends Component {
         this.VoxelNodeSelect.setRotationFromEuler(new Vec3(0, 0, 0));
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
+        const childList = this.VoxelNodeSelect.children;
         for (; i < voxelData.length; i++) {
-            if (i >= this.voxelList.Select.length) {
+            if (i === childList.length) {
                 const sv = this.createVoxel(voxelScale.Select);
                 this.VoxelNodeSelect.addChild(sv);
-                this.voxelList.Select.push(sv);
+                // this.voxelList.Select.push(sv);
+            } else if (i > childList.length) {
+                console.error('SELECT记录的体素数量超过实际子节点体素数量！！');
             }
-            const sv = this.voxelList.Select[i];
+            const sv = childList[i];
             sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Select);
             sv.active = true;
         }
 
-        while (i < this.voxelList.Select.length && this.voxelList.Select[i].active) {
-            this.voxelList.Select[i++].active = false;
+        while (i < childList.length && childList[i].active) {
+            childList[i++].active = false;
         }
 
         this.curSelectVoxelId = id;
@@ -536,9 +544,9 @@ export class MainController extends Component {
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
-            const op = this.UICanvas.getChildByName('InnerUI').getComponent(UIOpacity);
+            const innerUI = this.UICanvas.getChildByName('InnerUI');
             this.isInnerUI = !this.isInnerUI;
-            op.opacity = this.isInnerUI ? 255 : 0;
+            innerUI.active = this.isInnerUI;
         } else if (this.isInnerUI) {
             if (key.keyCode === KeyCode.CTRL_LEFT && this.clickState === ClickState.None && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
                 // 按住左ctrl多次选点
@@ -918,21 +926,24 @@ export class MainController extends Component {
 
         if (vid === this.drawEditVoxelIdBuffer) {
             const voxelData = this.voxelDataHistory.getVoxelById(vid);
+            const childList = this.VoxelNodeEdit.children;
             let i = 0;
             console.log(voxelData);
             for (; i < voxelData.length; i++) {
-                if (i >= this.voxelList.Edit.length) {
+                if (i === childList.length) {
                     const ev = this.createVoxel(voxelScale.Edit);
                     this.VoxelNodeEdit.addChild(ev);
-                    this.voxelList.Edit.push(ev);
+                    // this.voxelList.Edit.push(ev);
+                } else if (i > childList.length) {
+                    console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
                 }
-                const ev = this.voxelList.Edit[i];
+                const ev = childList[i];
                 ev.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Edit);
                 ev.active = true;
             }
-    
-            while (i < this.voxelList.Edit.length && this.voxelList.Edit[i].active) {
-                this.voxelList.Edit[i++].active = false;
+            this.activeEditVoxelNum = i;
+            while (i < childList.length && childList[i].active) {
+                childList[i++].active = false;
             }
 
         } 

@@ -52,7 +52,7 @@ export enum EditState {
     None = 0,
     Rotate = 1,
     MultiSelect = 2,
-    Moving = 3, 
+    Selecting = 3, 
 }
 
 export const type2Color = [
