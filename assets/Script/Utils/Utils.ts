@@ -53,6 +53,7 @@ export enum EditState {
     Rotate = 1,
     MultiSelect = 2,
     Selecting = 3, 
+    MultiDelete = 4,
 }
 
 export const type2Color = [
@@ -86,7 +87,7 @@ export const voxelScale = {
 
 export function angle2radian(angle: number): number {
     return angle * Math.PI * 0.005555556;   // angle * pi / 180(0.005555556 = 1 / 179.999985600)
-}
+}  
 
 export function isPosInQuad(pos: Vec2, quad: RectSize) {
     return pos.x >= quad.left && pos.x <= quad.right && pos.y >= quad.bottom && pos.y <= quad.top;

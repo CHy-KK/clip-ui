@@ -63,9 +63,10 @@ export class EditVoxel extends Component {
     }
 
     // TODO: 是否需要一个操作记录栈，毕竟如果误操作导致体素暴增后就不好删除了
+    // TODO: 注意，在任何增删体素的修改之后（也包括上面的撤销）需要修改this.controller.activeEditVoxelNum！！
 
     update(deltaTime: number) {
-        if (this.isMove && this.controller.isOutUI() && (this.editState === EditState.MultiSelect)) {
+        if (this.isMove && this.controller.isOutUI() && (this.editState === EditState.MultiSelect || this.editState === EditState.MultiDelete)) {
             this.selectGraph.clear();
             this.selectGraph.moveTo(this.clickUIPos.x, this.clickUIPos.y);
             this.selectGraph.lineTo(this.selectMovingUIPos.x, this.clickUIPos.y);
@@ -138,6 +139,7 @@ export class EditVoxel extends Component {
             if (!this.controller)
                 this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
             switch (this.editState) {
+                case EditState.MultiDelete:
                 case EditState.MultiSelect:
                     this.selectMovingUIPos = pos;
                     break;
@@ -173,17 +175,17 @@ export class EditVoxel extends Component {
 
     private onTouchEnd(e: EventTouch) {
         if (this.controller.isOutUI()) {
+            const clickEndPos = e.touch.getLocation();
+            const childList = this.node.children;
             if (this.isMove) {
                 switch (this.editState) {
                     case EditState.MultiSelect:
-                        const clickEndPos = e.touch.getLocation();
                         const selectQuad: RectSize = {
                             left: Math.min(this.clickStartPos.x, clickEndPos.x),
                             right: Math.max(this.clickStartPos.x, clickEndPos.x),
                             bottom: Math.min(this.clickStartPos.y, clickEndPos.y),
                             top: Math.max(this.clickStartPos.y, clickEndPos.y),
                         }
-                        const childList = this.node.children;
                         let matInstance = new Material();
                         matInstance.initialize({
                             effectName: 'builtin-standard',
@@ -192,9 +194,7 @@ export class EditVoxel extends Component {
                             }
                         });
                         matInstance.setProperty('mainColor', new Color(255, 255, 0, 255));
-                        for (let i = 0; i < childList.length; i++) {
-                            if (!childList[i].active) 
-                                break;
+                        for (let i = 0; i < this.controller.activeEditVoxelNum; i++) {
                             const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
                             if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuad)) {
                                 if (!this.selectIdxSet.has(i))
@@ -203,8 +203,29 @@ export class EditVoxel extends Component {
                                 mr.setMaterialInstance(matInstance, 0);
                             }
                         }
+                        break;
+                    case EditState.MultiDelete:
+                        // const clickEndPos = e.touch.getLocation();
+                        const selectQuadD: RectSize = {
+                            left: Math.min(this.clickStartPos.x, clickEndPos.x),
+                            right: Math.max(this.clickStartPos.x, clickEndPos.x),
+                            bottom: Math.min(this.clickStartPos.y, clickEndPos.y),
+                            top: Math.max(this.clickStartPos.y, clickEndPos.y),
+                        }
+                        for (let i = 0; i < this.controller.activeEditVoxelNum; i++) {
+                            const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
+                            if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuadD)) {
+                                if (this.selectIdxSet.has(i)) {
+                                    this.selectIdxSet.delete(i);
+                                    const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
+                                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                                }
+                            }
+                        }
+                        break;
                     case EditState.Selecting:   // 选中状态且移动，表示在拖动选中的体素，
                         this.editState = EditState.None;
+                        break;
                 }
     
                 this.isMove = false;
@@ -224,16 +245,18 @@ export class EditVoxel extends Component {
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         
         if (this.controller.isOutUI() && this.editState === EditState.None) {
+            const childList = this.node.children;
             switch(key.keyCode) {
                 case KeyCode.ALT_LEFT:
                     this.editState = EditState.Rotate;
                     break;
                 case KeyCode.CTRL_LEFT:
+                    this.selectGraph.strokeColor.fromHEX('0099aa');
+                    this.selectGraph.fillColor = new Color(0, 200, 200, 80);
                     this.editState = EditState.MultiSelect;
                     break;
-                case KeyCode.KEY_C:
+                case KeyCode.KEY_C:     // 复制当前选中的所有体素
                     console.log('copy');
-                    const childList = this.node.children;
                     this.selectIdxSet.forEach(value => {
                         if (this.controller.activeEditVoxelNum === childList.length) {
                             const ev = this.controller.createVoxel(voxelScale.Edit);
@@ -251,13 +274,28 @@ export class EditVoxel extends Component {
                         childList[i++].active = false;
                     }
                     break;
-                case KeyCode.DELETE:
+                case KeyCode.DELETE:    // 删除当前框选中的所有体素
+                    let deleteVoxelRef = new Array<Node>(this.selectIdxSet.size);
+                    this.controller.activeEditVoxelNum -= this.selectIdxSet.size;
+                    let idx = 0;
+                    this.selectIdxSet.forEach(value => {
+                        deleteVoxelRef[idx] = childList[value];
+                        idx++;
+                    });
+                    console.log(deleteVoxelRef.length);
+                    for (idx = 0; idx < deleteVoxelRef.length; idx++) {
+                        this.node.removeChild(deleteVoxelRef[idx]);
+                    }
+                    this.selectIdxSet.clear();
                     break;
                 case KeyCode.KEY_A:
-                    // TODO: 在一个体素的一个方向上增加体素
+                    // TODO: 在一个体素的一个方向上增加体素，记得修改this.controller.activeEditVoxelNum
                     break;
                 case KeyCode.KEY_D:
-                    // TODO: 框选删除体素
+                    // TODO: 本次框选中的体素，如果处于被选中状态则取消选中
+                    this.editState = EditState.MultiDelete;
+                    this.selectGraph.strokeColor.fromHEX('ff0000');
+                    this.selectGraph.fillColor = new Color(210, 0, 0, 40);
                     break;
 
             }
