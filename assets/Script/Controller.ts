@@ -84,10 +84,6 @@ export class MainController extends Component {
     @property(Node)
     public readonly quadPanelNode: Node = null;
 
-    
-    public activeEditVoxelNum: number = 0;  // 记录当前voxel节点下active的数量，方便在编辑时控制体素的增删
-    public drawEditVoxelIdBuffer: string = '';  // 这玩意好像没用，可以考虑删
-
     private data: DataPoint[] = [];
     private dataRatio: number = 1;
     private typeDict: Map<string, number> = new Map();
@@ -195,11 +191,9 @@ export class MainController extends Component {
         // 初始化体素，对每个体素列表预生成32 * 32 * 32个cube
         for (let i = 32 * 32 * 32; i >= 0; i--) {
             const sv = this.createVoxel(voxelScale.Select);
-            // this.voxelList.Select.push(sv);
             this.VoxelNodeSelect.addChild(sv);
             
             const ev = this.createVoxel(voxelScale.Edit);
-            // this.voxelList.Edit.push(ev);
             this.VoxelNodeEdit.addChild(ev);
         }
         
@@ -296,6 +290,14 @@ export class MainController extends Component {
                 this.isSnapShotReady = SnapShotState.None;
             }
         }
+    }
+
+    // TODO:设置体素的颜色等?
+    public createVoxel(scale: number): Node {
+        const vc = instantiate(this.VoxelCube);
+        vc.scale.multiplyScalar(scale);
+        vc.active = false;
+        return vc;
     }
 
     private drawHistoryBg() {
@@ -481,13 +483,7 @@ export class MainController extends Component {
         }
     }
 
-    // TODO:设置体素的颜色等
-    public createVoxel(scale: number): Node {
-        const vc = instantiate(this.VoxelCube);
-        vc.scale.multiplyScalar(scale);
-        vc.active = false;
-        return vc;
-    }
+ 
 
     // 标识当前
     public renderVoxelSelect(id: string, needSnapShot: boolean) {
@@ -919,37 +915,7 @@ export class MainController extends Component {
         this.renderVoxelSelect(id, needSnapShot);
     }
 
-    public async onDrawEditVoxel(vid: string) {
-        console.log('draw id: ' + vid);
-        // await this.drawEditLock.acquire();
-        console.log('origin id: ' + vid + ', now id: ' + this.drawEditVoxelIdBuffer);
 
-        if (vid === this.drawEditVoxelIdBuffer) {
-            const voxelData = this.voxelDataHistory.getVoxelById(vid);
-            const childList = this.VoxelNodeEdit.children;
-            let i = 0;
-            console.log(voxelData);
-            for (; i < voxelData.length; i++) {
-                if (i === childList.length) {
-                    const ev = this.createVoxel(voxelScale.Edit);
-                    this.VoxelNodeEdit.addChild(ev);
-                    // this.voxelList.Edit.push(ev);
-                } else if (i > childList.length) {
-                    console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
-                }
-                const ev = childList[i];
-                ev.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Edit);
-                ev.active = true;
-            }
-            this.activeEditVoxelNum = i;
-            while (i < childList.length && childList[i].active) {
-                childList[i++].active = false;
-            }
-
-        } 
-
-        // this.drawEditLock.release();
-    }
 
     // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
     public onSingleAddToPanelButtonClick() {
@@ -986,6 +952,10 @@ export class MainController extends Component {
 
     public isExistHistoryList(id: string) {
         return this.voxelDataHistory.isExist(id);
+    }
+
+    public getRawVoxelData(id: string) {
+        return this.voxelDataHistory.getVoxelById(id);
     }
 
     public async onInterpolationButtonClick() {

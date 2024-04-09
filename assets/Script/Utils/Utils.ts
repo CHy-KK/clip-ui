@@ -1,4 +1,4 @@
-import { Texture2D, Vec2, Node } from "cc";
+import { Texture2D, Vec2, Node, instantiate } from "cc";
 
 export type DataPoint = {
     dataPos: Vec2;
@@ -54,6 +54,7 @@ export enum EditState {
     MultiSelect = 2,
     Selecting = 3, 
     MultiDelete = 4,
+    DirectionalAdd = 5
 }
 
 export const type2Color = [
@@ -91,4 +92,12 @@ export function angle2radian(angle: number): number {
 
 export function isPosInQuad(pos: Vec2, quad: RectSize) {
     return pos.x >= quad.left && pos.x <= quad.right && pos.y >= quad.bottom && pos.y <= quad.top;
+}
+
+// TODO:设置体素的颜色等?
+export function createVoxel(scale: number): Node {
+    const vc = instantiate(this.VoxelCube);
+    vc.scale.multiplyScalar(scale);
+    vc.active = false;
+    return vc;
 }
