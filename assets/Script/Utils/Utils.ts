@@ -21,6 +21,15 @@ export type VoxelBuffer = {
     Edit: Node[]
 };
 
+export type cubeSize = {
+    left: number,
+    right: number, 
+    bottom: number, 
+    top: number,
+    front: number,
+    back: number
+}
+
 // export type 
 
 export enum RequestName {
@@ -94,10 +103,3 @@ export function isPosInQuad(pos: Vec2, quad: RectSize) {
     return pos.x >= quad.left && pos.x <= quad.right && pos.y >= quad.bottom && pos.y <= quad.top;
 }
 
-// TODO:设置体素的颜色等?
-export function createVoxel(scale: number): Node {
-    const vc = instantiate(this.VoxelCube);
-    vc.scale.multiplyScalar(scale);
-    vc.active = false;
-    return vc;
-}

@@ -1,7 +1,38 @@
-import { _decorator, Camera, Color, color, Component, director, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Material, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Vec2, Vec3, view } from 'cc';
+import { _decorator, Camera, Color, color, Component, director, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Vec2, Vec3, Vec4, view } from 'cc';
 import { MainController } from './Controller';
-import { angle2radian, EditState, isPosInQuad, RectSize, voxelScale } from './Utils/Utils';
+import { angle2radian, cubeSize, EditState, isPosInQuad, RectSize, voxelScale } from './Utils/Utils';
 const { ccclass, property } = _decorator;
+
+const voxelPosLimit = 3.2;
+
+type SelectInfo = {
+    selectCubeSize: cubeSize,
+    selectMovingUIPos: Vec2,
+    selectIdxSet: Set<number>,
+    selectZ: number
+}
+
+class VoxelData {
+    private data: Array<boolean> = new Array();
+
+    constructor() {
+        this.data = new Array(64 * 64 * 64);
+    }
+
+    public getData(x: number, y: number, z: number) {
+        return this.data[x * 4096 + y * 64 + z];
+    }
+
+    public setData(x: number, y: number, z: number, val: boolean) {
+        this.data[x * 4096 + y * 64 + z] = val;
+    }
+
+    public clear() {
+        for (let i = 0; i < this.data.length; i++)
+            this.data[i] = false;
+    }
+}
+
 
 @ccclass('EditVoxel')
 export class EditVoxel extends Component {
@@ -15,26 +46,44 @@ export class EditVoxel extends Component {
     @property(Material)
     public readonly defaultVoxelMat: Material = null;
 
-    // 在controller中每次重新drawedit都重置这两个参数
-    public curEditId: number;
-    public isGetVoxel: boolean = false;
-
-    private voxelData: Array<boolean> = new Array();
+    private editState: EditState = 0;
+    private voxelData: VoxelData = new VoxelData();
     private activeEditVoxelNum: number  // 记录当前处于active的体素数量
     private selectGraph: Graphics = null;
     private controller: MainController = null;
-    private editState: EditState = 0;
-    // private isRotating: boolean = false;+
     private isMove: boolean = false;
     private clickStartPos: Vec2 = new Vec2();
     private clickUIPos: Vec2 = new Vec2();
-    private selectMovingUIPos: Vec2 = new Vec2();
-    private selectIdxSet: Set<number> = new Set();
-    private selectZ: number = 0;
+
+    // private selectCubeSize: cubeSize = {
+    //     left: 10000,
+    //     right: -10000, 
+    //     bottom: 10000, 
+    //     top: -10000,
+    //     back: 10000,
+    //     front: -10000
+    // }
+    // private selectMovingUIPos: Vec2 = new Vec2();
+    // private selectIdxSet: Set<number> = new Set();
+    // private selectZ: number = 0;
+    private selectInfo: SelectInfo = {
+        selectCubeSize: {
+            left: 10000,
+            right: -10000, 
+            bottom: 10000, 
+            top: -10000,
+            back: 10000,
+            front: -10000
+        },
+        selectMovingUIPos: new Vec2(),
+        selectIdxSet: new Set(),
+        selectZ: 0
+    }
+
     private castVoxelPos: Vec3 = new Vec3();
     private castVoxelFace: Vec3 = new Vec3();
     private castFaceWorld: Vec3 = new Vec3();
-    private addRecord: number = 0;
+    private addRecord: number = 0;  
     private viewHalfWidth: number;
     private viewHalfHeight: number;
     private wsHalfWidth: number;
@@ -70,21 +119,20 @@ export class EditVoxel extends Component {
         // 对应鼠标事件的getLocation()
         this.viewHalfWidth = view.getViewportRect().width * 0.5;
         this.viewHalfHeight = view.getViewportRect().height * 0.5;
-
-        // voxelData[x * 4096 + y * 64 + z] 
-        this.voxelData = new Array(64 * 64 * 64);
     }
 
     // TODO: 是否需要一个操作记录栈，毕竟如果误操作导致体素暴增后就不好删除了
     // TODO: 注意，在任何增删体素的修改之后（也包括上面的撤销）需要修改this.activeEditVoxelNum！！
+    // TODO: 对所有修改了体素位置、增删的地方，改动需要同步this.voxelData
+    // TODO: 所有修改都需要确实是否在安全范围内：-voxelPosLimit~voxelPosLimit
 
-    update(deltaTime: number) {
+    update(deltaTime: number) { 
         if (this.isMove && this.controller.isOutUI() && (this.editState === EditState.MultiSelect || this.editState === EditState.MultiDelete)) {
             this.selectGraph.clear();
             this.selectGraph.moveTo(this.clickUIPos.x, this.clickUIPos.y);
-            this.selectGraph.lineTo(this.selectMovingUIPos.x, this.clickUIPos.y);
-            this.selectGraph.lineTo(this.selectMovingUIPos.x, this.selectMovingUIPos.y);
-            this.selectGraph.lineTo(this.clickUIPos.x, this.selectMovingUIPos.y);
+            this.selectGraph.lineTo(this.selectInfo.selectMovingUIPos.x, this.clickUIPos.y);
+            this.selectGraph.lineTo(this.selectInfo.selectMovingUIPos.x, this.selectInfo.selectMovingUIPos.y);
+            this.selectGraph.lineTo(this.clickUIPos.x, this.selectInfo.selectMovingUIPos.y);
             this.selectGraph.lineTo(this.clickUIPos.x, this.clickUIPos.y);
             this.selectGraph.stroke();
             this.selectGraph.fill();
@@ -93,9 +141,12 @@ export class EditVoxel extends Component {
 
     public async onDrawEditVoxel(vid: string) {
         const voxelData = this.controller.getRawVoxelData(vid);
+        this.voxelData.clear();
+        for (let i = 0; i < voxelData.length; i++) {
+            this.voxelData.setData(voxelData[i].x, voxelData[i].y, voxelData[i].z, true);
+        }
         const childList = this.node.children;
         let i = 0;
-        console.log(voxelData);
         for (; i < voxelData.length; i++) {
             if (i === childList.length) {
                 const ev = this.controller.createVoxel(voxelScale.Edit);
@@ -105,7 +156,7 @@ export class EditVoxel extends Component {
                 console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
             }
             const ev = childList[i];
-            ev.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Edit);
+            Vec3.multiplyScalar(ev.position, voxelData[i], voxelScale.Edit);
             ev.active = true;
         }
         this.activeEditVoxelNum = i;
@@ -120,7 +171,7 @@ export class EditVoxel extends Component {
             this.clickUIPos = pos;
             this.clickStartPos = e.touch.getLocation();
 
-            if (this.selectIdxSet.size > 0 && this.editState === EditState.None) {
+            if (this.selectInfo.selectIdxSet.size > 0 && this.editState === EditState.None) {
                 const screenRay = new geometry.Ray();
                 this.curCamera.screenPointToRay(e.getLocationX(), e.getLocationY(), screenRay);
 
@@ -130,11 +181,11 @@ export class EditVoxel extends Component {
                 if (rayCastRes) {
                     const res = PhysicsSystem.instance.raycastClosestResult.collider.node;
                     const resId = res.uuid;
-                    this.selectIdxSet.forEach(value => {
+                    this.selectInfo.selectIdxSet.forEach(value => {
                         if (childList[value].uuid === resId) {
                             castSelect = true;
                             this.editState = EditState.Selecting;
-                            this.selectZ = res.worldPosition.z; 
+                            this.selectInfo.selectZ = res.worldPosition.z; 
                             this.castVoxelPos = res.worldPosition;
                             // 计算本次点击是在体素的哪个面
                             this.node.inverseTransformPoint(this.castVoxelFace, PhysicsSystem.instance.raycastClosestResult.hitPoint);
@@ -177,11 +228,19 @@ export class EditVoxel extends Component {
                 } 
                 if (!(rayCastRes && castSelect)) {
                     // 恢复未选中状态
-                    this.selectIdxSet.forEach(value => {
+                    this.selectInfo.selectIdxSet.forEach(value => {
                         const mr = childList[value].getComponent(MeshRenderer);
                         mr.setMaterialInstance(this.defaultVoxelMat, 0);
                     });
-                    this.selectIdxSet.clear();  
+                    this.selectInfo.selectIdxSet.clear();  
+                    this.selectInfo.selectCubeSize = {
+                        left: 10000,
+                        right: -10000, 
+                        bottom: 10000, 
+                        top: -10000,
+                        back: 10000,
+                        front: -10000
+                    }
                 }
             }
         }
@@ -211,12 +270,13 @@ export class EditVoxel extends Component {
             switch (this.editState) {
                 case EditState.MultiDelete:
                 case EditState.MultiSelect:
-                    this.selectMovingUIPos = pos;
+                    this.selectInfo.selectMovingUIPos = pos;
                     break;
 
                 case EditState.Rotate:
                     const deltaMove: Vec2 = (e.getDelta()).multiplyScalar(0.5);
                     this.node.rotate(Quat.fromEuler(new Quat(), -deltaMove.y, deltaMove.x, 0), 1);
+                    break;
 
                 case EditState.Selecting: {
                     const clickX = this.wsHalfWidth * (posSS.x - this.viewHalfWidth) / this.viewHalfWidth;
@@ -224,22 +284,53 @@ export class EditVoxel extends Component {
 
                     // 利用等腰三角形计算体素需要被移动到的位置的相机距离
                     const clickDis2Camera = Math.sqrt(clickX * clickX + clickY * clickY + this.curCamera.near * this.curCamera.near);
-                    const targetDis2Camera = clickDis2Camera * Math.abs(this.selectZ - this.curCamera.node.position.z) / this.curCamera.near;
+                    const targetDis2Camera = clickDis2Camera * Math.abs(this.selectInfo.selectZ - this.curCamera.node.position.z) / this.curCamera.near;
          
                     let target: Vec3 = new Vec3();
                     const myRay = new Vec3(clickX, clickY, -1).normalize();
                     Vec3.multiplyScalar(target, myRay, targetDis2Camera);
+                    // 判断本次移动是否会造成超出范围
+                    let localTarget = this.node.inverseTransformPoint(new Vec3(), target);
+                    const localCastPos = this.node.inverseTransformPoint(new Vec3(), this.castVoxelPos);
+                    let localOffset = Vec3.subtract(new Vec3(), localTarget, localCastPos);
+                    localOffset.x = Math.max(localOffset.x, -voxelPosLimit - this.selectInfo.selectCubeSize.left);
+                    localOffset.x = Math.min(localOffset.x, voxelPosLimit - this.selectInfo.selectCubeSize.right);
+                    localOffset.y = Math.max(localOffset.y, -voxelPosLimit - this.selectInfo.selectCubeSize.bottom);
+                    localOffset.y = Math.min(localOffset.y, voxelPosLimit - this.selectInfo.selectCubeSize.top);
+                    localOffset.z = Math.max(localOffset.z, -voxelPosLimit - this.selectInfo.selectCubeSize.back);
+                    localOffset.z = Math.min(localOffset.z, voxelPosLimit - this.selectInfo.selectCubeSize.front);
+
+                    this.selectInfo.selectCubeSize.left += localOffset.x;
+                    this.selectInfo.selectCubeSize.right += localOffset.x;
+                    this.selectInfo.selectCubeSize.bottom += localOffset.y;
+                    this.selectInfo.selectCubeSize.top += localOffset.y;
+                    this.selectInfo.selectCubeSize.front += localOffset.z;
+                    this.selectInfo.selectCubeSize.back += localOffset.z;
+
+                    Vec3.add(localTarget, localOffset, localCastPos);
+                    
+                    const targetVec4 = Vec4.transformAffine(new Vec4(), new Vec4(localTarget.x, localTarget.y, localTarget.z, 1), this.node.getWorldMatrix()); 
+
+                    target.x = targetVec4.x;
+                    target.y = targetVec4.y;
+                    target.z = targetVec4.z;
+
                     const offset: Vec3 = Vec3.subtract(new Vec3(), target, this.castVoxelPos);
                     const childList = this.node.children;
-                    this.selectIdxSet.forEach(value => {
+                    this.selectInfo.selectIdxSet.forEach(value => {
                         childList[value].setWorldPosition(Vec3.add(new Vec3(), childList[value].worldPosition, offset));
                     });
                     this.castVoxelPos = target;
                     break;
                 }
                     
-                case EditState.DirectionalAdd: {    // 记得修改this.activeEditVoxelNum
-                    console.log();
+                case EditState.DirectionalAdd: {    
+                    // TODO: 根据addRecord以及addDir来判断增删体素，如果addDir和addRecord异号，
+                    // 说明要取消新增的体素，如果反向并超过说明不仅要取消还要到另一边新增
+                    // 记得修改this.activeEditVoxelNum
+                    // 要根据voxeldata中的记录看新增的体素是否有覆盖原来就有的体素
+                    // 新增体素范围不能超过voxelPosLimit
+                    // 同时记得更新selectCubeSize
                     const addDir = Vec2.dot(e.touch.getDelta(), new Vec2(this.castFaceWorld.x, this.castFaceWorld.y));
                     const addNum = Math.abs(addDir);
                     for (let i = 0; i < addNum; i++) {
@@ -276,10 +367,18 @@ export class EditVoxel extends Component {
                         for (let i = 0; i < this.activeEditVoxelNum; i++) {
                             const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
                             if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuad)) {
-                                if (!this.selectIdxSet.has(i))
-                                    this.selectIdxSet.add(i);
-                                const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
-                                mr.setMaterialInstance(matInstance, 0);
+                                if (!this.selectInfo.selectIdxSet.has(i)) {
+                                    this.selectInfo.selectIdxSet.add(i);
+                                    const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
+                                    mr.setMaterialInstance(matInstance, 0);
+                                    const pos = childList[i].position;
+                                    this.selectInfo.selectCubeSize.left = Math.min(this.selectInfo.selectCubeSize.left, pos.x);
+                                    this.selectInfo.selectCubeSize.right = Math.max(this.selectInfo.selectCubeSize.right, pos.x);
+                                    this.selectInfo.selectCubeSize.bottom = Math.min(this.selectInfo.selectCubeSize.bottom, pos.y);
+                                    this.selectInfo.selectCubeSize.top = Math.max(this.selectInfo.selectCubeSize.top, pos.y);
+                                    this.selectInfo.selectCubeSize.back = Math.min(this.selectInfo.selectCubeSize.back, pos.z);
+                                    this.selectInfo.selectCubeSize.front = Math.max(this.selectInfo.selectCubeSize.front, pos.z);
+                                }
                             }
                         }
                         break;
@@ -294,8 +393,8 @@ export class EditVoxel extends Component {
                         for (let i = 0; i < this.activeEditVoxelNum; i++) {
                             const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
                             if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuadD)) {
-                                if (this.selectIdxSet.has(i)) {
-                                    this.selectIdxSet.delete(i);
+                                if (this.selectInfo.selectIdxSet.has(i)) {
+                                    this.selectInfo.selectIdxSet.delete(i);
                                     const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
                                     mr.setMaterialInstance(this.defaultVoxelMat, 0);
                                 }
@@ -304,9 +403,9 @@ export class EditVoxel extends Component {
                         break;
                     case EditState.Selecting:   //  体素位移结束后，需要把体素local position归正到64 * 64空间
                         this.editState = EditState.None;
-                        this.selectIdxSet.forEach(value => {
+                        this.selectInfo.selectIdxSet.forEach(value => {
                             let pos = childList[value].position;
-                            childList[value].setPosition(Vec3.floor(new Vec3(), pos.multiplyScalar(1 / voxelScale.Edit)).multiplyScalar(voxelScale.Edit));
+                            childList[value].setPosition(Vec3.round(new Vec3(), pos.multiplyScalar(1 / voxelScale.Edit)).multiplyScalar(voxelScale.Edit));
                         });
                         break;
                 }
@@ -326,7 +425,6 @@ export class EditVoxel extends Component {
     private onkeyDown(key: EventKeyboard) {
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        
         if (this.controller.isOutUI() && this.editState === EditState.None) {
             const childList = this.node.children;
             switch(key.keyCode) {
@@ -340,7 +438,7 @@ export class EditVoxel extends Component {
                     break;
                 case KeyCode.KEY_C:     // 复制当前选中的所有体素
                     console.log('copy');
-                    this.selectIdxSet.forEach(value => {
+                    this.selectInfo.selectIdxSet.forEach(value => {
                         if (this.activeEditVoxelNum === childList.length) {
                             const ev = this.controller.createVoxel(voxelScale.Edit);
                             this.node.addChild(ev);
@@ -358,18 +456,17 @@ export class EditVoxel extends Component {
                     }
                     break;
                 case KeyCode.DELETE:    // 删除当前框选中的所有体素
-                    let deleteVoxelRef = new Array<Node>(this.selectIdxSet.size);
-                    this.activeEditVoxelNum -= this.selectIdxSet.size;
+                    let deleteVoxelRef = new Array<Node>(this.selectInfo.selectIdxSet.size);
+                    this.activeEditVoxelNum -= this.selectInfo.selectIdxSet.size;
                     let idx = 0;
-                    this.selectIdxSet.forEach(value => {
+                    this.selectInfo.selectIdxSet.forEach(value => {
                         deleteVoxelRef[idx] = childList[value];
                         idx++;
                     });
-                    console.log(deleteVoxelRef.length);
                     for (idx = 0; idx < deleteVoxelRef.length; idx++) {
                         this.node.removeChild(deleteVoxelRef[idx]);
                     }
-                    this.selectIdxSet.clear();
+                    this.selectInfo.selectIdxSet.clear();
                     break;
                 case KeyCode.KEY_A:     // 在一个体素的一个方向上增加体素
                     this.editState = EditState.DirectionalAdd;

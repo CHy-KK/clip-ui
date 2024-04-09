@@ -282,7 +282,6 @@ export class MainController extends Component {
         }
 
         if (this.isSnapShotReady !== SnapShotState.None) {
-            console.log("this.snapShot===================");
             if (this.isSnapShotReady === SnapShotState.wait1frame) {
                 this.isSnapShotReady++;
             } else {
@@ -362,9 +361,6 @@ export class MainController extends Component {
         this.axisGraph.moveTo(originPos.x, renderRect.top);
         this.axisGraph.lineTo(originPos.x + 5, renderRect.top - 10);
         this.axisGraph.stroke();
-
-        
-        console.log()
     }
 
     private drawAxisScale(renderRect: RectSize, sr: RectSize) {
@@ -395,7 +391,7 @@ export class MainController extends Component {
             scaleLabelListX.push(xpos);
             scaleLabelListY.push(ypos);
         }
-        console.log(scaleLabelListX.length);
+        
         for (let i = 0; i < scaleLabelListX.length; i++) {
             this.scaleGraph.moveTo(scaleLabelListX[i], originPos.y - 5);
             this.scaleGraph.lineTo(scaleLabelListX[i], originPos.y + 5);
@@ -584,8 +580,7 @@ export class MainController extends Component {
     }
 
     private onTouchStart(e: EventTouch) {
-        if(PREVIEW)
-            console.log('click!!');
+        
         const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
             if (pos.x > this.scatterRect.left && pos.x < this.scatterRect.right && pos.y > this.scatterRect.bottom && pos.y < this.scatterRect.top) {
@@ -618,8 +613,7 @@ export class MainController extends Component {
 
     private onTouchMove(e: EventTouch) {
         const pos: Vec2 = e.touch.getUILocation();
-        if (PREVIEW)
-            console.log(this.clickState);
+        
         if (this.isInnerUI) {              // ui交互事件
             this.isMove = true;
             switch(this.clickState) {
@@ -728,10 +722,6 @@ export class MainController extends Component {
                             this.SelectGraphic.addChild(selectNode);
                             this.selectDataList.push(pointList[i].idx);
                             
-                            if (PREVIEW) {
-                                console.log('shot on node!' + pointList[i].screenPos);
-                                console.log(pos);
-                            }
                             break;
                         }
                     }
@@ -762,8 +752,6 @@ export class MainController extends Component {
                 const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
                 touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
                 
-                if (PREVIEW)
-                    console.log('panel uv:' + uv);
             }
         }
 
@@ -787,8 +775,8 @@ export class MainController extends Component {
             if (xhr.readyState === 4 && xhr.status === 200) { // 如果请求已完成，且响应状态码为200（即成功），则...  
                 let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
                 
-                if (PREVIEW)
-                    console.log(response); // 在控制台打印响应数据  
+                // if (PREVIEW)
+                //     console.log(response); // 在控制台打印响应数据  
                 let i = 0;
                 this.scatterRange = {
                     left: 0, 
@@ -799,13 +787,13 @@ export class MainController extends Component {
                 response.forEach(d => {
                     const typeStr = d[0].split(' ')[0];
                     
-                    if (PREVIEW)
-                        console.log(typeStr);
+                    // if (PREVIEW)
+                    //     console.log(typeStr);
                     if (!this.typeDict.has(typeStr)) {
                         this.typeDict.set(typeStr, this.typeDict.size);
                         
-                        if (PREVIEW)
-                            console.log(this.typeDict.get(typeStr));
+                        // if (PREVIEW)
+                        //     console.log(this.typeDict.get(typeStr));
                     }
 
                     const newDataPoint: DataPoint = {
@@ -834,9 +822,7 @@ export class MainController extends Component {
             }  
         };  
         
-        console.log(url);
         xhr.send();
-        console.log('send end');
     }
 
     private async waitUntilGetVoxelFnish() {
@@ -872,8 +858,8 @@ export class MainController extends Component {
                 const rawVoxelData = JSON.parse(xhr.responseText);
                 let voxelData: Vec3[] = [];
                 
-                if (PREVIEW) 
-                    console.log(rawVoxelData); 
+                // if (PREVIEW) 
+                //     console.log(rawVoxelData); 
 
                 for (let x = 0; x < 64; x++) {
                     for (let y = 0; y < 64; y++) {
@@ -897,7 +883,6 @@ export class MainController extends Component {
             }  
         };  
 
-        console.log(url);
         xhr.send();
     }
 
@@ -927,7 +912,6 @@ export class MainController extends Component {
                 return;
         }
         let i = 0;
-        console.log(childList);
         for (; i < 4; i++) {
             if (!childList[i].active) {
                 const qsp = childList[i].getComponent(Sprite);
