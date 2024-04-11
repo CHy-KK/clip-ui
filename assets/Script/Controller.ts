@@ -189,13 +189,15 @@ export class MainController extends Component {
         this.selectGraph.fillColor = new Color(0, 200, 200, 80);
 
         // 初始化体素，对每个体素列表预生成32 * 32 * 32个cube
-        for (let i = 32 * 32 * 32; i >= 0; i--) {
-            const sv = this.createVoxel(voxelScale.Select);
-            this.VoxelNodeSelect.addChild(sv);
+        this.VoxelNodeSelect.setScale(new Vec3(voxelScale.Select, voxelScale.Select, voxelScale.Select));
+        this.VoxelNodeEdit.setScale(new Vec3(voxelScale.Edit, voxelScale.Edit, voxelScale.Edit));
+        // for (let i = 32 * 32 * 32; i >= 0; i--) {
+        //     const sv = this.createVoxel();
+        //     this.VoxelNodeSelect.addChild(sv);
             
-            const ev = this.createVoxel(voxelScale.Edit);
-            this.VoxelNodeEdit.addChild(ev);
-        }
+        //     const ev = this.createVoxel();
+        //     this.VoxelNodeEdit.addChild(ev);
+        // }
         
         // 体素文件读取HTML元素初始化
         this.voxelDownLoadLink = document.createElement("a");
@@ -292,9 +294,8 @@ export class MainController extends Component {
     }
 
     // TODO:设置体素的颜色等?
-    public createVoxel(scale: number): Node {
+    public createVoxel(): Node {
         const vc = instantiate(this.VoxelCube);
-        vc.scale.multiplyScalar(scale);
         vc.active = false;
         return vc;
     }
@@ -489,14 +490,15 @@ export class MainController extends Component {
         const childList = this.VoxelNodeSelect.children;
         for (; i < voxelData.length; i++) {
             if (i === childList.length) {
-                const sv = this.createVoxel(voxelScale.Select);
+                const sv = this.createVoxel();
                 this.VoxelNodeSelect.addChild(sv);
                 // this.voxelList.Select.push(sv);
             } else if (i > childList.length) {
                 console.error('SELECT记录的体素数量超过实际子节点体素数量！！');
             }
             const sv = childList[i];
-            sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Select);
+            // sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Select);
+            sv.position = voxelData[i];
             sv.active = true;
         }
 
@@ -551,8 +553,25 @@ export class MainController extends Component {
                     if (this.voxelDataHistory.length() === this.historyMaxLength)
                         this.voxelDataHistory.popHead();
                     const vd = [];
-                    for (let i = randomRangeInt(100, 5000); i >= 0; i--)
-                        vd.push(new Vec3(randomRangeInt(-32, 32), randomRangeInt(-32, 32), randomRangeInt(-32, 32)));
+                    // for (let i = randomRangeInt(100, 5000); i >= 0; i--)
+                    //     vd.push(new Vec3(randomRangeInt(-32, 32), randomRangeInt(-32, 32), randomRangeInt(-32, 32)));
+                    if (random() < 0.5) {
+                        for (let x = -8; x < 8; x++) {
+                            for (let y = -8; y < 8; y++) {
+                                for (let z = -8; z < 8; z++) {
+                                    vd.push(new Vec3(x, y, z));
+                                }
+                            }
+                        }
+                    } else {
+                        for (let x = -20; x < -10; x++) {
+                            for (let y = -20; y < -10; y++) {
+                                for (let z = -20; z < -10; z++) {
+                                    vd.push(new Vec3(x, y, z));
+                                }
+                            }
+                        }
+                    }
                     this.voxelDataHistory.push(vd, id, parseInt(id));
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                     this.renderVoxelSelect(id, true);
@@ -581,8 +600,8 @@ export class MainController extends Component {
 
     private onTouchStart(e: EventTouch) {
         
-        const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
+            const pos: Vec2 = e.touch.getUILocation();
             if (pos.x > this.scatterRect.left && pos.x < this.scatterRect.right && pos.y > this.scatterRect.bottom && pos.y < this.scatterRect.top) {
                 this.clickState = ClickState.Scatter;
                 pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
@@ -612,9 +631,9 @@ export class MainController extends Component {
     }
 
     private onTouchMove(e: EventTouch) {
-        const pos: Vec2 = e.touch.getUILocation();
         
         if (this.isInnerUI) {              // ui交互事件
+            const pos: Vec2 = e.touch.getUILocation();
             this.isMove = true;
             switch(this.clickState) {
                 case ClickState.Scatter: 
@@ -648,8 +667,8 @@ export class MainController extends Component {
     }
 
     private onTouchEnd(e: EventTouch) {
-        const pos: Vec2 = e.touch.getUILocation();
         if (this.isInnerUI) {
+            const pos: Vec2 = e.touch.getUILocation();
             if (this.clickState === ClickState.Scatter) {
                 if (this.isMove && !this.isSelectCtrl) {    // 框选
                     pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
@@ -714,7 +733,7 @@ export class MainController extends Component {
                     pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
                     for (let i = 0; i < pointList.length; i++) {
                         if (this.distanceVec2(pos, pointList[i].screenPos) < 3) {
-                           
+                            
                             const selectNode = instantiate(this.SelectNode);
                             this.ScatterGraphic.addChild(selectNode);
                             selectNode.setPosition(new Vec3(pointList[i].screenPos.x + this.scatterRect.left, pointList[i].screenPos.y + this.scatterRect.bottom, 0));
@@ -760,7 +779,6 @@ export class MainController extends Component {
         // this.isPanel = false;
         // this.isRotateSelectVoxel = false;
         this.clickState = ClickState.None;
-        console.log('clear select');
         this.selectGraph.clear();
     }
 

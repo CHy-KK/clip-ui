@@ -63,7 +63,8 @@ export enum EditState {
     MultiSelect = 2,
     Selecting = 3, 
     MultiDelete = 4,
-    DirectionalAdd = 5
+    DirectionalAdd = 5,
+    Copying = 6
 }
 
 export const type2Color = [
