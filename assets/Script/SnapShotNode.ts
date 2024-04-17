@@ -35,7 +35,7 @@ export class SnapShotNode extends Component {
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         if (this.inout) {
             if (this.controller.isOutUI()) {
-                this.editVoxelController.onDrawEditVoxel(this.vid);
+                this.editVoxelController.onDrawEditVoxelById(this.vid);
             }
         } else {
             this.controller.renderVoxelSelect(this.vid, false);

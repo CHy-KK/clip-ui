@@ -8,7 +8,7 @@ import { PanelNode } from './PanelNode';
 import { DataPoint, RectSize, VoxelBuffer, SelectingType, SnapShotState, voxelScale, type2Color, RequestName, angle2radian, ClickState } from './Utils/Utils';
 const { ccclass, property } = _decorator;
 
-const SERVER_HOST = 'http://127.0.0.1:5001';    // 注意这里端口可能被占用
+const SERVER_HOST = 'http://127.0.0.1:5000';    // 注意这里端口可能被占用
 const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
 const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel';
 export const DRAW_EDIT_VOXEL_EVENT = 'draw-edit-voxel';
@@ -115,8 +115,9 @@ export class MainController extends Component {
     private scatterRect: RectSize;
     private axisLength: number;
     private tileLength: number;
-    private voxelRead: HTMLInputElement = null;
-    private voxelDownLoadLink: HTMLAnchorElement = null;
+    private voxelReadHTML: HTMLInputElement = null;
+    private voxelDownLoadLinkHTML: HTMLAnchorElement = null;
+    private imageReadHTML: HTMLInputElement = null;
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -200,10 +201,10 @@ export class MainController extends Component {
         // }
         
         // 体素文件读取HTML元素初始化
-        this.voxelDownLoadLink = document.createElement("a");
-        this.voxelRead = document.createElement('input');
-        this.voxelRead.setAttribute('type', 'file');
-        this.voxelRead.addEventListener('change', (event) => {  
+        this.voxelDownLoadLinkHTML = document.createElement("a");
+        this.voxelReadHTML = document.createElement('input');
+        this.voxelReadHTML.setAttribute('type', 'file');
+        this.voxelReadHTML.addEventListener('change', (event) => {  
             console.log('file input!!');
             const file = (event.target as HTMLInputElement).files[0]
             console.log(file);  
@@ -218,38 +219,89 @@ export class MainController extends Component {
 
         }); 
 
-        /************* test code *************/
-        for (let i = 0; i < 1000; i++) {
-            this.data.push({
-                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-                screenPos: new Vec2(0, 0),
-                value: 0,
-                idx: i,
-                type: randomRangeInt(0, 10),
-                name: i.toString()
-            })
-        }
+        this.imageReadHTML = document.createElement('input');
+        this.imageReadHTML.setAttribute('type', 'file');
+        this.imageReadHTML.addEventListener('change', (event) => {
+            const file = (event.target as HTMLInputElement).files[0];
 
-        if (this.data.length > 0) {
-            this.scatterRange = {
-                left: this.data[0].dataPos.x, 
-                right: this.data[0].dataPos.x, 
-                bottom: this.data[0].dataPos.y, 
-                top: this.data[0].dataPos.y
-            };
-        }
-        this.data.forEach(value => {
-            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        })
-        this.drawHistoryBg();
-        this.drawAxis(this.scatterRect);
-        this.drawAxisScale(this.scatterRect, this.scatterRange);
-        this.drawScatter(this.scatterRect, this.scatterRange);
-        this.isInitialize = true;
+            let formData = new FormData();  
+            formData.append('image', file);  
+            formData.append("name", file.name);
+            console.log('send image');
+        
+            let xhr = new XMLHttpRequest();  
+            xhr.open('POST', SERVER_HOST + RequestName.SendImage, true);  
+            xhr.onload = () => {  
+                if (xhr.status === 200) {  
+                    try {
+                        const receiveData = JSON.parse(xhr.response);
+                        const rawVoxelData = receiveData[1];  
+                        const fileName = receiveData[0][0];
+                        console.log(receiveData);
+                        console.log(fileName);  
+                        console.log(rawVoxelData);  
+                        let voxelData: Vec3[] = [];
+    
+                        for (let x = 0; x < 64; x++) {
+                            for (let y = 0; y < 64; y++) {
+                                for (let z = 0; z < 64; z++) {
+                                    if (rawVoxelData[z][y][x]) {
+                                        voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                                    }
+                                }
+                            }
+                        }
+    
+                        // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
+                        // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                        if (!this.voxelDataHistory.push(voxelData, fileName, -1)) {   // 如果队列满了则pop掉队首
+                            this.voxelDataHistory.popHead();
+                            this.voxelDataHistory.push(voxelData, fileName, -1);
+                        }   
+                        
+                        this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+                        this.renderVoxelSelect(fileName, true);
+                    } catch (e) {
+                        console.error('传送图片获取体素失败');
+                    }
+                    
+                }  
+            };  
+            xhr.send(formData);  
+        });
+
         /************* test code *************/
+        // for (let i = 0; i < 1000; i++) {
+        //     this.data.push({
+        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+        //         screenPos: new Vec2(0, 0),
+        //         value: 0,
+        //         idx: i,
+        //         type: randomRangeInt(0, 10),
+        //         name: i.toString()
+        //     })
+        // }
+
+        // if (this.data.length > 0) {
+        //     this.scatterRange = {
+        //         left: this.data[0].dataPos.x, 
+        //         right: this.data[0].dataPos.x, 
+        //         bottom: this.data[0].dataPos.y, 
+        //         top: this.data[0].dataPos.y
+        //     };
+        // }
+        // this.data.forEach(value => {
+        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        // })
+        // this.drawAxis(this.scatterRect);
+        // this.drawAxisScale(this.scatterRect, this.scatterRange);
+        // this.drawScatter(this.scatterRect, this.scatterRange);
+        // this.isInitialize = true;
+        /************* test code *************/
+        this.drawHistoryBg();
 
     }
 
@@ -891,9 +943,9 @@ export class MainController extends Component {
 
                 // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
                 // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? -1 : idx0)) {   // 如果队列满了则pop掉队首
+                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? -1 : idx0);
+                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? idx0 : -1);
                 }   
                 
                 this.isGetVoxelFinished = true;
@@ -922,21 +974,22 @@ export class MainController extends Component {
 
     // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
     public onSingleAddToPanelButtonClick() {
-        const id = this.selectDataList[0].toString();
         const childList = this.quadPanelNode.children;
-
+        console.log(this.curSelectVoxelId);
         for (let i = 0; i < 4; i++) {
-            if (id === childList[i].getComponent(PanelNode).vid)
+            if (this.curSelectVoxelId === childList[i].getComponent(PanelNode).vid)
                 return;
         }
+        console.log('next');
         let i = 0;
         for (; i < 4; i++) {
             if (!childList[i].active) {
                 const qsp = childList[i].getComponent(Sprite);
-                qsp.spriteFrame = this.voxelDataHistory.getSnapShotById(id);
+                qsp.spriteFrame = this.voxelDataHistory.getSnapShotById(this.curSelectVoxelId);
                 if (qsp.spriteFrame) {
                     childList[i].active = true;
-                    childList[i].getComponent(PanelNode).vid = id;
+                    childList[i].getComponent(PanelNode).vid = this.curSelectVoxelId;
+                    console.log('set sp');
                     break;
                 } else
                     return;
@@ -971,6 +1024,10 @@ export class MainController extends Component {
             childList[1].active ? getIdx(1) : -1,
             childList[2].active ? getIdx(2) : -1,
             childList[3].active ? getIdx(3) : -1];
+        console.log('idxlist = ' + idxList);
+        console.log('total data length: ' + this.data.length);
+        console.log(getIdx(0));
+        console.log(getIdx(1));
         const id = this.data[idxList[0]].name + '-' 
             + (idxList[1] === -1 ? '' : (this.data[idxList[1]].name + '-')) 
             + (idxList[2] === -1 ? '' : (this.data[idxList[2]].name + '-')) 
@@ -1061,7 +1118,11 @@ export class MainController extends Component {
     }
 
     public onLoadVoxel() {
-        this.voxelRead.click();
+        this.voxelReadHTML.click();
+    }
+
+    public onSendImage() {
+        this.imageReadHTML.click();
     }
 
     private sendVoxelToServer(voxel: Vec3[]) {
@@ -1072,11 +1133,11 @@ export class MainController extends Component {
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(this.curSelectVoxelId);
         const jsonStr = JSON.stringify(voxelData);
         const textFileAsBlob = new Blob([jsonStr], { type: 'application/json' });
-        this.voxelDownLoadLink.download = 'voxel' + (type === 'select' ? this.curSelectVoxelId : this.curEditVoxelId);
+        this.voxelDownLoadLinkHTML.download = 'voxel' + (type === 'select' ? this.curSelectVoxelId : this.curEditVoxelId);
         if (window.webkitURL != null) {
-            this.voxelDownLoadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+            this.voxelDownLoadLinkHTML.href = window.webkitURL.createObjectURL(textFileAsBlob);
         }
-        this.voxelDownLoadLink.click();
+        this.voxelDownLoadLinkHTML.click();
     }
 
 }

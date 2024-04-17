@@ -138,7 +138,7 @@ export class VoxelHistoryQueue {
 
     public getIdxInDataById(id: string): number {
         const idx = this.isExist(id);
-        console.log(idx);
+        console.log('in history? ' + idx);
         return this.voxelIdxHistory.getElement(idx).idxInData;
     }
 

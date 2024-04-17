@@ -83,6 +83,8 @@ export class EditVoxel extends Component {
     private sliderY: Slider = null;
     private editboxZ: EditBox = null;
     private sliderZ: Slider = null;
+    private voxelRead: HTMLInputElement = null;
+    private voxelDownLoadLink: HTMLAnchorElement = null;
 
     /**
      * @tip 记录本次选中体素信息
@@ -167,6 +169,35 @@ export class EditVoxel extends Component {
         this.sliderY = director.getScene().getChildByPath('mainUI/OutUI/RAY/TotalSlider').getComponent(Slider);
         this.editboxZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/EditBox').getComponent(EditBox);
         this.sliderZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/TotalSlider').getComponent(Slider);
+
+        // 初始化文件加载和下载模块
+        this.voxelDownLoadLink = document.createElement("a");
+        this.voxelRead = document.createElement('input');
+        this.voxelRead.setAttribute('type', 'file');
+        this.voxelRead.addEventListener('change', (event) => {  
+            console.log('file input!!');
+            const file = (event.target as HTMLInputElement).files[0]
+            console.log(file);  
+            const reader = new FileReader();  
+            reader.onload = (e) => {  
+                try {
+                    const fileData = e.target.result; 
+                    console.log(fileData);
+                    const fd = JSON.parse(fileData as string);
+                    const vd = new Array<Vec3>();
+                    fd.forEach(element => {
+                        vd.push(new Vec3(element.x, element.y, element.z));
+                    });
+                    console.log(vd);
+                    this.renderEditVoxel(vd);
+                } catch(e) {
+                    console.error('not voxel file');
+                }
+                
+            };  
+            reader.readAsText(file);  
+
+        }); 
     }
 
     // TODO: 是否需要一个操作记录栈，毕竟如果误操作导致体素暴增后就不好删除了
@@ -201,7 +232,14 @@ export class EditVoxel extends Component {
         }
     }
 
-    public async onDrawEditVoxel(vid: string) {
+    public async onDrawEditVoxelById(vid: string) {
+
+        const voxelData = this.controller.getRawVoxelData(vid);
+        this.renderEditVoxel(voxelData);
+    }
+
+
+    public renderEditVoxel(voxelData: Vec3[]) {
         // 把之前的所有状态清空
         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
             const mr = chd.getComponent(MeshRenderer);
@@ -210,8 +248,6 @@ export class EditVoxel extends Component {
         this.resetSelectInfo();
         this.voxelPosQuery.clear();
         this.editState = EditState.None;
-
-        const voxelData = this.controller.getRawVoxelData(vid);
         const childList = this.node.children;
         let i = 0;
         for (; i < voxelData.length; i++) {
@@ -837,6 +873,27 @@ export class EditVoxel extends Component {
             }
             this.node.setWorldRotation(Quat.fromEuler(new Quat(), this.rotateAngleX, this.rotateAngleY, this.rotateAngleZ));
         }
+    }
+
+
+    public onloadVoxel() {
+        this.voxelRead.click();
+    }
+
+    public onSaveVoxelToFile(type: string) {
+        let voxelData = new Array<Vec3>();
+
+        const childList = this.node.children;
+        for (let i = 0; i < this.activeEditVoxelNum; i++) {
+            voxelData.push(childList[i].position);
+        }
+        const jsonStr = JSON.stringify(voxelData);
+        const textFileAsBlob = new Blob([jsonStr], { type: 'application/json' });
+        this.voxelDownLoadLink.download = 'voxel';
+        if (window.webkitURL != null) {
+            this.voxelDownLoadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
+        }
+        this.voxelDownLoadLink.click();
     }
 }
 

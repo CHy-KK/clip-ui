@@ -35,6 +35,7 @@ export type cubeSize = {
 export enum RequestName {
     InitializeOverview = '/initialize_overview',
     GetVoxel = '/get_voxel',
+    SendImage = '/get_embeddings_by_image',
 };
 
 export enum SelectingType {
