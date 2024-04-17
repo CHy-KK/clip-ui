@@ -181,10 +181,10 @@ export class Queue<T> {
     private headIdx: number = 0;
     private tailIdx: number = 0;
  
-    constructor(maxLength: number) {
+    constructor(maxLength: number = 0) {
         this.maxLength = maxLength;
         this.data = new Array(maxLength);
-    }
+    };
 
     public push(d: T): boolean {
         if (this.length < this.maxLength) {
