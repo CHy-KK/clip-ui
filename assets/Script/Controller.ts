@@ -271,35 +271,35 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        for (let i = 0; i < 1000; i++) {
-            this.data.push({
-                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-                screenPos: new Vec2(0, 0),
-                value: 0,
-                idx: i,
-                type: randomRangeInt(0, 10),
-                name: i.toString()
-            })
-        }
+        // for (let i = 0; i < 1000; i++) {
+        //     this.data.push({
+        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+        //         screenPos: new Vec2(0, 0),
+        //         value: 0,
+        //         idx: i,
+        //         type: randomRangeInt(0, 10),
+        //         name: i.toString()
+        //     })
+        // }
 
-        if (this.data.length > 0) {
-            this.scatterRange = {
-                left: this.data[0].dataPos.x, 
-                right: this.data[0].dataPos.x, 
-                bottom: this.data[0].dataPos.y, 
-                top: this.data[0].dataPos.y
-            };
-        }
-        this.data.forEach(value => {
-            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        })
-        this.drawAxis(this.scatterRect);
-        this.drawAxisScale(this.scatterRect, this.scatterRange);
-        this.drawScatter(this.scatterRect, this.scatterRange);
-        this.isInitialize = true;
+        // if (this.data.length > 0) {
+        //     this.scatterRange = {
+        //         left: this.data[0].dataPos.x, 
+        //         right: this.data[0].dataPos.x, 
+        //         bottom: this.data[0].dataPos.y, 
+        //         top: this.data[0].dataPos.y
+        //     };
+        // }
+        // this.data.forEach(value => {
+        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        // })
+        // this.drawAxis(this.scatterRect);
+        // this.drawAxisScale(this.scatterRect, this.scatterRange);
+        // this.drawScatter(this.scatterRect, this.scatterRange);
+        // this.isInitialize = true;
         /************* test code *************/
         this.drawHistoryBg();
 
@@ -844,9 +844,19 @@ export class MainController extends Component {
         xhr.onreadystatechange = () => { // 当请求被发送到服务器时，我们需要执行一些动作  
             if (xhr.readyState === 4 && xhr.status === 200) { // 如果请求已完成，且响应状态码为200（即成功），则...  
                 let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
+
+                if (PREVIEW) {  // 将本次初始化数据保存到本地
+                    const textFileAsBlob = new Blob([xhr.responseText], { type: 'application/json' });
+                    this.voxelDownLoadLinkHTML.download = 'initializeData';
+                    if (window.webkitURL != null) {
+                        this.voxelDownLoadLinkHTML.href = window.webkitURL.createObjectURL(textFileAsBlob);
+                    }
+                    this.voxelDownLoadLinkHTML.click();
+                }
                 
-                // if (PREVIEW)
-                //     console.log(response); // 在控制台打印响应数据  
+                if (PREVIEW)
+                    console.log(response);
+
                 let i = 0;
                 this.scatterRange = {
                     left: 0, 
@@ -857,13 +867,8 @@ export class MainController extends Component {
                 response.forEach(d => {
                     const typeStr = d[0].split(' ')[0];
                     
-                    // if (PREVIEW)
-                    //     console.log(typeStr);
                     if (!this.typeDict.has(typeStr)) {
                         this.typeDict.set(typeStr, this.typeDict.size);
-                        
-                        // if (PREVIEW)
-                        //     console.log(this.typeDict.get(typeStr));
                     }
 
                     const newDataPoint: DataPoint = {
