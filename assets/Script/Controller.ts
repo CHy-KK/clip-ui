@@ -271,35 +271,35 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        // for (let i = 0; i < 1000; i++) {
-        //     this.data.push({
-        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-        //         screenPos: new Vec2(0, 0),
-        //         value: 0,
-        //         idx: i,
-        //         type: randomRangeInt(0, 10),
-        //         name: i.toString()
-        //     })
-        // }
+        for (let i = 0; i < 1000; i++) {
+            this.data.push({
+                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+                screenPos: new Vec2(0, 0),
+                value: 0,
+                idx: i,
+                type: randomRangeInt(0, 10),
+                name: i.toString()
+            })
+        }
 
-        // if (this.data.length > 0) {
-        //     this.scatterRange = {
-        //         left: this.data[0].dataPos.x, 
-        //         right: this.data[0].dataPos.x, 
-        //         bottom: this.data[0].dataPos.y, 
-        //         top: this.data[0].dataPos.y
-        //     };
-        // }
-        // this.data.forEach(value => {
-        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        // })
-        // this.drawAxis(this.scatterRect);
-        // this.drawAxisScale(this.scatterRect, this.scatterRange);
-        // this.drawScatter(this.scatterRect, this.scatterRange);
-        // this.isInitialize = true;
+        if (this.data.length > 0) {
+            this.scatterRange = {
+                left: this.data[0].dataPos.x, 
+                right: this.data[0].dataPos.x, 
+                bottom: this.data[0].dataPos.y, 
+                top: this.data[0].dataPos.y
+            };
+        }
+        this.data.forEach(value => {
+            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        })
+        this.drawAxis(this.scatterRect);
+        this.drawAxisScale(this.scatterRect, this.scatterRange);
+        this.drawScatter(this.scatterRect, this.scatterRange);
+        this.isInitialize = true;
         /************* test code *************/
         this.drawHistoryBg();
 

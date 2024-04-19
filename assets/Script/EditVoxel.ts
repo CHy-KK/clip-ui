@@ -1,10 +1,15 @@
-import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view } from 'cc';
+import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Label, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view } from 'cc';
 import { MainController } from './Controller';
 import { angle2radian, cubeSize, EditState, isPosInQuad, RectSize } from './Utils/Utils';
 import { Queue } from './Utils/Queue';
 const { ccclass, property } = _decorator;
 
 const voxelPosLimit = 32;
+const opTipString = {
+    normal: '按住左alt旋转体素\n按住左ctrl框选\n按住D取消框选体素\n按DELETE删除选中的体素\n按C进入复制当前选中体素\n按住A选择本次需要增加的体素',
+    copy: '按D退出复制模式\n按V在当前位置粘贴复制的体素',
+    dirAdd:  '按D退出增加体素模式\n在拖动增加体素时按V粘贴增加的体素'
+}
 
 type SelectInfo = {
     selectCubeSize: cubeSize,
@@ -85,6 +90,7 @@ export class EditVoxel extends Component {
     private sliderZ: Slider = null;
     private voxelRead: HTMLInputElement = null;
     private voxelDownLoadLink: HTMLAnchorElement = null;
+    private opTipLabel: Label = null;
 
     /**
      * @tip 记录本次选中体素信息
@@ -169,6 +175,8 @@ export class EditVoxel extends Component {
         this.sliderY = director.getScene().getChildByPath('mainUI/OutUI/RAY/TotalSlider').getComponent(Slider);
         this.editboxZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/EditBox').getComponent(EditBox);
         this.sliderZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/TotalSlider').getComponent(Slider);
+        this.opTipLabel = director.getScene().getChildByPath('mainUI/OutUI/OperationTip/tips').getComponent(Label);
+        this.opTipLabel.string = opTipString.normal;
 
         // 初始化文件加载和下载模块
         this.voxelDownLoadLink = document.createElement("a");
@@ -372,10 +380,12 @@ export class EditVoxel extends Component {
                     //     }
                     // });
                     if (this.selectInfo.selectNodeSet.has(res)) {
+                        this.opTipLabel.string = opTipString.normal;
                         this.selectInfo.selectNodeSet.delete(res);
                         const mr = res.getComponent(MeshRenderer);
                         mr.setMaterialInstance(this.defaultVoxelMat, 0);
                     } else if (this.selectInfo.selectNodeSet.size === 0) {
+                        this.opTipLabel.string = opTipString.dirAdd;
                         const mr = res.getComponent(MeshRenderer);
                         mr.setMaterialInstance(this.selectVoxelMat, 0);
                         // 因为不用移动，所以不用设置selectInfo中的其他属性
@@ -684,21 +694,24 @@ export class EditVoxel extends Component {
                         break;
                     case KeyCode.KEY_C:     // 复制当前选中的所有体素，进入copying状态，阻塞其他一切操作，直到粘贴或者取消复制
                         console.log('copy');
-                        this.editState = EditState.Copying;
-                        this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-                            if (this.activeEditVoxelNum === childList.length) {
-                                const ev = this.controller.createVoxel();
-                                this.node.addChild(ev);
-                            } else if (this.activeEditVoxelNum > childList.length) {
-                                console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
+                        if (this.selectInfo.selectNodeSet.size > 0) {
+                            this.editState = EditState.Copying;
+                            this.opTipLabel.string = opTipString.copy;
+                            this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                if (this.activeEditVoxelNum === childList.length) {
+                                    const ev = this.controller.createVoxel();
+                                    this.node.addChild(ev);
+                                } else if (this.activeEditVoxelNum > childList.length) {
+                                    console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
+                                }
+                                const ev = childList[this.activeEditVoxelNum++];
+                                ev.position = chd.position;
+                                ev.active = true;
+                            });
+                            let i = this.activeEditVoxelNum;
+                            while (i < childList.length && childList[i].active) {
+                                childList[i++].active = false;
                             }
-                            const ev = childList[this.activeEditVoxelNum++];
-                            ev.position = chd.position;
-                            ev.active = true;
-                        });
-                        let i = this.activeEditVoxelNum;
-                        while (i < childList.length && childList[i].active) {
-                            childList[i++].active = false;
                         }
                         break;
                     case KeyCode.DELETE:    // 删除当前框选中的所有体素
@@ -759,6 +772,7 @@ export class EditVoxel extends Component {
                         });
                         this.resetSelectInfo();
                         this.editState = EditState.None;
+                        this.opTipLabel.string = opTipString.normal;
                         break;
 
                 }
@@ -776,6 +790,7 @@ export class EditVoxel extends Component {
                         });
                         this.resetSelectInfo();
                         this.editState = EditState.None;
+                        this.opTipLabel.string = opTipString.normal;
                         break;
                 }
             } else if (this.editState === EditState.DirectionalAddMove && key.keyCode === KeyCode.KEY_V) {
