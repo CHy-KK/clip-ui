@@ -95,6 +95,7 @@ export class MainController extends Component {
     private selectGraph: Graphics;      // 选中区域绘制
     private historyBgGraph: Graphics;       // 外UI历史选中列表
     private innerHistoryGraph: Graphics;    // 内UI历史选中列表
+    private contourBg: Node;          // 散点图下等高线图
     private scatterRange: RectSize; // x-min, x-max, y-min, y-max
     private scatterWidth: number;
     private scatterHeight: number;
@@ -153,6 +154,7 @@ export class MainController extends Component {
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
         this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
         this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+        this.contourBg = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/Contour');
 
         // 计算显示select界面区域坐标
         const quadSelct = this.UICanvas.getChildByPath('InnerUI/ShowSelectVoxelScreen');
@@ -271,35 +273,35 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        // for (let i = 0; i < 1000; i++) {
-        //     this.data.push({
-        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-        //         screenPos: new Vec2(0, 0),
-        //         value: 0,
-        //         idx: i,
-        //         type: randomRangeInt(0, 10),
-        //         name: i.toString()
-        //     })
-        // }
+        for (let i = 0; i < 1000; i++) {
+            this.data.push({
+                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+                screenPos: new Vec2(0, 0),
+                value: 0,
+                idx: i,
+                type: randomRangeInt(0, 10),
+                name: i.toString()
+            })
+        }
 
-        // if (this.data.length > 0) {
-        //     this.scatterRange = {
-        //         left: this.data[0].dataPos.x, 
-        //         right: this.data[0].dataPos.x, 
-        //         bottom: this.data[0].dataPos.y, 
-        //         top: this.data[0].dataPos.y
-        //     };
-        // }
-        // this.data.forEach(value => {
-        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        // })
-        // this.drawAxis(this.scatterRect);
-        // this.drawAxisScale(this.scatterRect, this.scatterRange);
-        // this.drawScatter(this.scatterRect, this.scatterRange);
-        // this.isInitialize = true;
+        if (this.data.length > 0) {
+            this.scatterRange = {
+                left: this.data[0].dataPos.x, 
+                right: this.data[0].dataPos.x, 
+                bottom: this.data[0].dataPos.y, 
+                top: this.data[0].dataPos.y
+            };
+        }
+        this.data.forEach(value => {
+            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        })
+        this.drawAxis(this.scatterRect);
+        this.drawAxisScale(this.scatterRect, this.scatterRange);
+        this.drawScatter(this.scatterRect, this.scatterRange);
+        this.isInitialize = true;
         /************* test code *************/
         this.drawHistoryBg();
 
@@ -569,6 +571,10 @@ export class MainController extends Component {
         console.log('shnap shot id is ' + msg.id);
         const snapshot = new SpriteFrame();
         const rtData = this.selectRT.readPixels();
+        
+        console.log(rtData);
+        console.log(this.selectRT.width);
+        console.log(this.selectRT.height);
         const voxelTexture = new Texture2D();
         voxelTexture.reset({ width: this.selectRT.width, height: this.selectRT.height, format: Texture2D.PixelFormat.RGBA8888, mipmapLevel: 0 })
         voxelTexture.uploadData(rtData, 0, 0);
@@ -837,6 +843,8 @@ export class MainController extends Component {
     /*------------------------------------------- button触发事件 -------------------------------------------*/ 
 
     public onInitializeButtonClick() {    
+        if (this.isInitialize)
+            return;
         let xhr = new XMLHttpRequest();
         let url = SERVER_HOST + RequestName.InitializeOverview;
         
@@ -846,12 +854,12 @@ export class MainController extends Component {
                 let response = JSON.parse(xhr.responseText); // 解析服务器响应的JSON数据  
 
                 if (PREVIEW) {  // 将本次初始化数据保存到本地
-                    const textFileAsBlob = new Blob([xhr.responseText], { type: 'application/json' });
-                    this.voxelDownLoadLinkHTML.download = 'initializeData';
-                    if (window.webkitURL != null) {
-                        this.voxelDownLoadLinkHTML.href = window.webkitURL.createObjectURL(textFileAsBlob);
-                    }
-                    this.voxelDownLoadLinkHTML.click();
+                    // const textFileAsBlob = new Blob([xhr.responseText], { type: 'application/json' });
+                    // this.voxelDownLoadLinkHTML.download = 'initializeData';
+                    // if (window.webkitURL != null) {
+                    //     this.voxelDownLoadLinkHTML.href = window.webkitURL.createObjectURL(textFileAsBlob);
+                    // }
+                    // this.voxelDownLoadLinkHTML.click();
                 }
                 
                 if (PREVIEW)
@@ -876,7 +884,8 @@ export class MainController extends Component {
                         screenPos: new Vec2(0, 0),
                         value: 0,           // 待定
                         idx: i,
-                        type: this.typeDict.get(typeStr),
+                        // type: this.typeDict.get(typeStr),
+                        type: d[1][1],
                         name: d[0],
                     }
                     
@@ -1145,4 +1154,40 @@ export class MainController extends Component {
         this.voxelDownLoadLinkHTML.click();
     }
 
+    public onContourButtonClick() {
+        if (this.isInitialize) {
+            this.contourBg.active = !this.contourBg.active;
+            if (!this.contourBg.active)
+                return;
+            let xhr = new XMLHttpRequest();
+
+            let url = SERVER_HOST + RequestName.GetContour;
+            
+            xhr.open('GET', url, true);
+            xhr.onreadystatechange = () => { 
+                if (xhr.readyState === 4 && xhr.status === 200) { 
+                    const data = JSON.parse(xhr.response);
+                    const encoded_image = 'data:image/png;base64,' + data.image;
+
+                    const image = new Image();
+                    image.onload = () => {
+                        const img = new ImageAsset(image);
+                        const texture = new Texture2D();
+                        texture.image = img;
+                        const spf = new SpriteFrame();
+                        spf.texture = texture;
+                        this.contourBg.getComponent(Sprite).spriteFrame = spf;
+                        this.contourBg.getComponent(UITransform).contentSize.set(580, 580);
+                    }
+                    image.src = encoded_image;
+                }  
+            };
+            xhr.send();
+        }
+        
+    }
+
+    public onShowScatterButtonClick() {
+        this.ScatterGraphic.active = !this.ScatterGraphic.active;
+    }
 }
