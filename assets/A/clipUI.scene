@@ -1854,7 +1854,7 @@
       "__id__": 42
     },
     "_children": [],
-    "_active": true,
+    "_active": false,
     "_components": [
       {
         "__id__": 44
@@ -5541,7 +5541,7 @@
     "_prefab": null,
     "_lpos": {
       "__type__": "cc.Vec3",
-      "x": -50,
+      "x": -35,
       "y": 0,
       "z": 0
     },
@@ -5662,7 +5662,7 @@
     "_horizontalAlign": 1,
     "_verticalAlign": 1,
     "_actualFontSize": 17,
-    "_fontSize": 17,
+    "_fontSize": 15,
     "_fontFamily": "Arial",
     "_lineHeight": 40,
     "_overflow": 1,

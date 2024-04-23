@@ -136,6 +136,8 @@ export class MainController extends Component {
     private clickState: ClickState = 0;
     private curSelectVoxelId: string = '';  //  当前innerUI显示在select区域的体素id
     private curEditVoxelId: string = '';    //  当亲outUI显示在编辑区域的体素id 
+    private downSampleList: number[] = [];  //  降采样列表
+    private isSampleChange: boolean = true;    // 是否修改了采样数据范围，决定是否要重新获取等高线图
     // private drawEditLock: LockAsync = new LockAsync();
 
     start() {
@@ -273,35 +275,35 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        for (let i = 0; i < 1000; i++) {
-            this.data.push({
-                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-                screenPos: new Vec2(0, 0),
-                value: 0,
-                idx: i,
-                type: randomRangeInt(0, 10),
-                name: i.toString()
-            })
-        }
+        // for (let i = 0; i < 1000; i++) {
+        //     this.data.push({
+        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+        //         screenPos: new Vec2(0, 0),
+        //         value: 0,
+        //         idx: i,
+        //         type: randomRangeInt(0, 10),
+        //         name: i.toString()
+        //     })
+        // }
 
-        if (this.data.length > 0) {
-            this.scatterRange = {
-                left: this.data[0].dataPos.x, 
-                right: this.data[0].dataPos.x, 
-                bottom: this.data[0].dataPos.y, 
-                top: this.data[0].dataPos.y
-            };
-        }
-        this.data.forEach(value => {
-            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        })
-        this.drawAxis(this.scatterRect);
-        this.drawAxisScale(this.scatterRect, this.scatterRange);
-        this.drawScatter(this.scatterRect, this.scatterRange);
-        this.isInitialize = true;
+        // if (this.data.length > 0) {
+        //     this.scatterRange = {
+        //         left: this.data[0].dataPos.x, 
+        //         right: this.data[0].dataPos.x, 
+        //         bottom: this.data[0].dataPos.y, 
+        //         top: this.data[0].dataPos.y
+        //     };
+        // }
+        // this.data.forEach(value => {
+        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        // })
+        // this.drawAxis(this.scatterRect);
+        // this.drawAxisScale(this.scatterRect, this.scatterRange);
+        // this.drawScatter(this.scatterRect, this.scatterRange);
+        // this.isInitialize = true;
         /************* test code *************/
         this.drawHistoryBg();
 
@@ -1073,21 +1075,22 @@ export class MainController extends Component {
 
     public onChangeSlide(progress: number) {
         const dNum = Math.ceil(this.data.length * progress);
-        let downSampleList = new Array(dNum);
+        this.downSampleList = new Array(dNum);
         if (this.dataRatio != progress) {
             this.clearAllStates();
             this.dataRatio = progress;
+            this.isSampleChange = true;
             if (progress < 1) {
-
+                this.contourBg.active = false;
                 for (let i = 0; i < dNum; i++)
-                    downSampleList[i] = Math.floor(randomRange(0, 0.99999999) * this.data.length);
+                    this.downSampleList[i] = Math.floor(randomRange(0, 0.99999999) * this.data.length);
                 let sr: RectSize = {
-                    left: this.data[downSampleList[0]].dataPos.x,
-                    right: this.data[downSampleList[0]].dataPos.x,
-                    bottom: this.data[downSampleList[0]].dataPos.y,
-                    top: this.data[downSampleList[0]].dataPos.y
+                    left: this.data[this.downSampleList[0]].dataPos.x,
+                    right: this.data[this.downSampleList[0]].dataPos.x,
+                    bottom: this.data[this.downSampleList[0]].dataPos.y,
+                    top: this.data[this.downSampleList[0]].dataPos.y
                 }
-                downSampleList.forEach(idx => {
+                this.downSampleList.forEach(idx => {
                     if (idx >= this.data.length)
                         console.error('out of data!!!');
                     sr.left = Math.min(sr.left, this.data[idx].dataPos.x);
@@ -1096,30 +1099,34 @@ export class MainController extends Component {
                     sr.top = Math.max(sr.top, this.data[idx].dataPos.y);
                 })
                 this.drawAxisScale(this.scatterRect, sr);
-                this.drawScatterIndex(this.scatterRect, sr, downSampleList);
+                this.drawScatterIndex(this.scatterRect, sr, this.downSampleList);
             } else {
+                this.contourBg.active = false;
+                this.downSampleList = [];
                 this.drawAxisScale(this.scatterRect, this.scatterRange);
                 this.drawScatter(this.scatterRect, this.scatterRange);
             }
         }
-
     }
 
     public sampleRangeScatter() {
-        let sampleList = new Array(this.selectDataList.length);
+        // TODO: 这里其实没做是否是框选全部数据点的安全措施
+        this.isSampleChange = true;
+        this.contourBg.active = false;
+        this.downSampleList = new Array(this.selectDataList.length);
         for (let i = 0; i < this.selectDataList.length; i++) {
-            sampleList[i] = this.selectDataList[i];
+            this.downSampleList[i] = this.selectDataList[i];
         }
         this.clearAllStates();
         this.dataRatio = -1; // 这里修改为0，返回全部采样点时直接调用onChangeSlide传入原来的progress就行
 
         let sr: RectSize = {
-            left: this.data[sampleList[0]].dataPos.x,
-            right: this.data[sampleList[0]].dataPos.x,
-            bottom: this.data[sampleList[0]].dataPos.y,
-            top: this.data[sampleList[0]].dataPos.y
+            left: this.data[this.downSampleList[0]].dataPos.x,
+            right: this.data[this.downSampleList[0]].dataPos.x,
+            bottom: this.data[this.downSampleList[0]].dataPos.y,
+            top: this.data[this.downSampleList[0]].dataPos.y
         }
-        sampleList.forEach(idx => {
+        this.downSampleList.forEach(idx => {
             if (idx >= this.data.length)
                 console.error('out of data!!!');
             sr.left = Math.min(sr.left, this.data[idx].dataPos.x);
@@ -1128,7 +1135,7 @@ export class MainController extends Component {
             sr.top = Math.max(sr.top, this.data[idx].dataPos.y);
         })
         this.drawAxisScale(this.scatterRect, sr);
-        this.drawScatterIndex(this.scatterRect, sr, sampleList);
+        this.drawScatterIndex(this.scatterRect, sr, this.downSampleList);
     }
 
     public onLoadVoxel() {
@@ -1155,15 +1162,27 @@ export class MainController extends Component {
     }
 
     public onContourButtonClick() {
+        // TODO: 要做显示当前数据点类别的颜色映射显示，以及提供选择查看不同分类的等高线
         if (this.isInitialize) {
-            this.contourBg.active = !this.contourBg.active;
-            if (!this.contourBg.active)
+            if (this.contourBg.active) {
+                this.contourBg.active = false;
                 return;
-            let xhr = new XMLHttpRequest();
+            }
 
-            let url = SERVER_HOST + RequestName.GetContour;
+            if (!this.isSampleChange) {
+                this.contourBg.active = true;
+                return;
+            }
+            const xhr = new XMLHttpRequest();
+
+            const url = SERVER_HOST + RequestName.GetContour;
+
+            console.log('sned???');
+            const formData = new FormData();  
+            formData.append('sample', this.downSampleList.toString());
+            formData.append('centerType', '0');
             
-            xhr.open('GET', url, true);
+            xhr.open('POST', url, true);
             xhr.onreadystatechange = () => { 
                 if (xhr.readyState === 4 && xhr.status === 200) { 
                     const data = JSON.parse(xhr.response);
@@ -1178,11 +1197,13 @@ export class MainController extends Component {
                         spf.texture = texture;
                         this.contourBg.getComponent(Sprite).spriteFrame = spf;
                         this.contourBg.getComponent(UITransform).contentSize.set(580, 580);
+                        this.contourBg.active = true;
+                        this.isSampleChange = false;
                     }
                     image.src = encoded_image;
                 }  
             };
-            xhr.send();
+            xhr.send(formData);
         }
         
     }
