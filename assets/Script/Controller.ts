@@ -134,10 +134,12 @@ export class MainController extends Component {
     // private isPanel: boolean = false;
     // private isRotateSelectVoxel: boolean = false;
     private clickState: ClickState = 0;
-    private curSelectVoxelId: string = '';  //  当前innerUI显示在select区域的体素id
-    private curEditVoxelId: string = '';    //  当亲outUI显示在编辑区域的体素id 
-    private downSampleList: number[] = [];  //  降采样列表
-    private isSampleChange: boolean = true;    // 是否修改了采样数据范围，决定是否要重新获取等高线图
+    private curSelectVoxelId: string = '';      // 当前innerUI显示在select区域的体素id
+    private curEditVoxelId: string = '';        // 当亲outUI显示在编辑区域的体素id 
+    private downSampleList: number[] = [];      // 降采样列表
+    private isSampleChange: boolean = true;     // 是否修改了采样数据范围，决定是否要重新获取等高线图
+    private togglesParentNode: Node = null;     // 控制当前生成等高线图的中心类别节点
+    private curToggle: number = 0;              
     // private drawEditLock: LockAsync = new LockAsync();
 
     start() {
@@ -157,6 +159,7 @@ export class MainController extends Component {
         this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
         this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
         this.contourBg = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/Contour');
+        this.togglesParentNode = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/NodeTypeSelector');
 
         // 计算显示select界面区域坐标
         const quadSelct = this.UICanvas.getChildByPath('InnerUI/ShowSelectVoxelScreen');
@@ -190,7 +193,7 @@ export class MainController extends Component {
         
 
         this.selectGraph.lineWidth = 1;
-        this.selectGraph.strokeColor.fromHEX('0099aa');
+        this.selectGraph.strokeColor.fromHEX('#0099aa');
         this.selectGraph.fillColor = new Color(0, 200, 200, 80);
 
         // 初始化体素，对每个体素列表预生成32 * 32 * 32个cube
@@ -275,35 +278,48 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        // for (let i = 0; i < 1000; i++) {
-        //     this.data.push({
-        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-        //         screenPos: new Vec2(0, 0),
-        //         value: 0,
-        //         idx: i,
-        //         type: randomRangeInt(0, 10),
-        //         name: i.toString()
-        //     })
-        // }
+        for (let i = 0; i < 1000; i++) { 3
+            const typeStr = randomRangeInt(0, 10).toString();
+                    
+            if (!this.typeDict.has(typeStr)) {
+                this.typeDict.set(typeStr, this.typeDict.size);
+            }
+            this.data.push({
+                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+                screenPos: new Vec2(0, 0),
+                value: 0,
+                idx: i,
+                type: this.typeDict.get(typeStr),
+                name: i.toString()
+            })
+        }
 
-        // if (this.data.length > 0) {
-        //     this.scatterRange = {
-        //         left: this.data[0].dataPos.x, 
-        //         right: this.data[0].dataPos.x, 
-        //         bottom: this.data[0].dataPos.y, 
-        //         top: this.data[0].dataPos.y
-        //     };
-        // }
-        // this.data.forEach(value => {
-        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        // })
-        // this.drawAxis(this.scatterRect);
-        // this.drawAxisScale(this.scatterRect, this.scatterRange);
-        // this.drawScatter(this.scatterRect, this.scatterRange);
-        // this.isInitialize = true;
+        if (this.data.length > 0) {
+            this.scatterRange = {
+                left: this.data[0].dataPos.x, 
+                right: this.data[0].dataPos.x, 
+                bottom: this.data[0].dataPos.y, 
+                top: this.data[0].dataPos.y
+            };
+        }
+        this.data.forEach(value => {
+            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        })
+        const toggleChildList = this.togglesParentNode.children;
+        toggleChildList[0].active = true;
+        for (let i = 1; i <= this.typeDict.size; i++) {
+            toggleChildList[i].active = true;
+            const toggleSp = toggleChildList[i].getComponent(Sprite);
+            toggleSp.color.fromHEX(type2Color[i - 1]);
+            console.log(toggleSp.color);
+        }
+        this.drawAxis(this.scatterRect);
+        this.drawAxisScale(this.scatterRect, this.scatterRange);
+        this.drawScatter(this.scatterRect, this.scatterRange);
+        this.isInitialize = true;
         /************* test code *************/
         this.drawHistoryBg();
 
@@ -358,7 +374,7 @@ export class MainController extends Component {
 
     private drawHistoryBg() {
         // OutterUI history background
-        this.historyBgGraph.fillColor.fromHEX('656565');
+        this.historyBgGraph.fillColor.fromHEX('#656565');
         this.historyBgGraph.moveTo(150, 210);
         this.historyBgGraph.lineTo(1130, 210);
         this.historyBgGraph.lineTo(1180, 160);
@@ -375,7 +391,7 @@ export class MainController extends Component {
         this.historyBgGraph.fill();
 
         // InnerUI history background
-        this.innerHistoryGraph.fillColor.fromHEX('656565');
+        this.innerHistoryGraph.fillColor.fromHEX('#656565');
         this.innerHistoryGraph.moveTo(-20, -300);
         this.innerHistoryGraph.lineTo(10, -330);
         this.innerHistoryGraph.lineTo(50, -330);
@@ -875,7 +891,9 @@ export class MainController extends Component {
                     top: 0
                 };
                 response.forEach(d => {
-                    const typeStr = d[0].split(' ')[0];
+                    // const typeStr = d[0].split(' ')[0];
+                    // 不管type上是什么直接按照set统计，后续可以考虑保存type字符串打印在toggle下面
+                    const typeStr = d[1][1];
                     
                     if (!this.typeDict.has(typeStr)) {
                         this.typeDict.set(typeStr, this.typeDict.size);
@@ -886,8 +904,7 @@ export class MainController extends Component {
                         screenPos: new Vec2(0, 0),
                         value: 0,           // 待定
                         idx: i,
-                        // type: this.typeDict.get(typeStr),
-                        type: d[1][1],
+                        type: this.typeDict.get(typeStr),
                         name: d[0],
                     }
                     
@@ -899,6 +916,15 @@ export class MainController extends Component {
                     this.data.push(newDataPoint);
                     i++;
                 });
+                // 初始化toggles
+                const toggleChildList = this.togglesParentNode.children;
+                toggleChildList[0].active = true;
+                for (let i = 1; i <= this.typeDict.size; i++) {
+                    toggleChildList[i].active = true;
+                    toggleChildList[i].getComponent(Sprite).color.fromHEX(type2Color[i]);
+                }
+
+                // 初始化散点图绘制
                 this.scatterGraph.clear();
                 this.drawAxis(this.scatterRect);
                 this.drawAxisScale(this.scatterRect, this.scatterRange);
@@ -1176,11 +1202,9 @@ export class MainController extends Component {
             const xhr = new XMLHttpRequest();
 
             const url = SERVER_HOST + RequestName.GetContour;
-
-            console.log('sned???');
             const formData = new FormData();  
             formData.append('sample', this.downSampleList.toString());
-            formData.append('centerType', '0');
+            formData.append('centerType', this.curToggle.toString());
             
             xhr.open('POST', url, true);
             xhr.onreadystatechange = () => { 
@@ -1203,6 +1227,8 @@ export class MainController extends Component {
                     image.src = encoded_image;
                 }  
             };
+            console.log('send contout request');
+            console.log(this.curToggle);
             xhr.send(formData);
         }
         
@@ -1210,5 +1236,12 @@ export class MainController extends Component {
 
     public onShowScatterButtonClick() {
         this.ScatterGraphic.active = !this.ScatterGraphic.active;
+    }
+
+    public onToggleClick(e: Event, customEventData: string) {
+        const idx = parseInt(customEventData);
+        const childList = this.togglesParentNode.children;
+        childList[0].setPosition(childList[idx].position);
+        this.curToggle = idx - 1;
     }
 }

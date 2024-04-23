@@ -74,27 +74,29 @@ export enum EditState {
 }
 
 export const type2Color = [
-    'ff0000',
-    '00ff00',
-    '0000ff',
-    'ffff00',
-    'ff00ff',
-    '00ffff',
-    'f0f000',
-    'f000f0',
-    '00f0f0',
-    '88f088',
-    'f08888',
-    '8888f0',
-    'bcaf6e',
-    'cdfcae',
-    '7ac6ed',
+    'FF0000',
+    '00FF00',
+    'A7E3FF',
+
+    'FFFF00',
+    'FF00FF',
+    'FF8705',
+
+    'FDBBA0',
+    'A055FF',
+    '00F0F0',
+
+    '88F088',
+    'F08888',
+    '8888F0',
+    'BCAF6E',
+    'CDFCAE',
+    '7AC6ED',
     '34acds',
     '9fe4a5',
     'ba4390',
     '7384fa',
     '1188ee',
-    'ee8811',
 ]
 
 export const voxelScale = {
