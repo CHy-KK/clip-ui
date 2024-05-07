@@ -4,6 +4,7 @@ import { InOrOut, SnapShotNode } from "../SnapShotNode";
 
 export type VoxelRecord = {
     vid: string,
+    embedding: Array<number>,
     idxInData: number,
     snapShotState: boolean
 }
@@ -110,11 +111,11 @@ export class VoxelHistoryQueue {
         this.innerHistoryListNode.setPosition(new Vec3(0, 215, 0));
     }
 
-    public push(voxel: Vec3[], id: string, idx: number, sss: boolean = false): boolean {
+    public push(voxel: Vec3[], id: string, emb: number[], idx: number, sss: boolean = false): boolean {
         if (this.isExist(id) != -1)
             return true;
         
-        if (this.voxelIdxHistory.push({ vid: id, idxInData: idx, snapShotState: sss })) {
+        if (this.voxelIdxHistory.push({ vid: id, embedding: emb, idxInData: idx, snapShotState: sss })) {
             this.rawVoxelDataHistory.push(voxel);
             this.pushSprite(id);
             return true;
@@ -140,6 +141,12 @@ export class VoxelHistoryQueue {
         const idx = this.isExist(id);
         console.log('in history? ' + idx);
         return this.voxelIdxHistory.getElement(idx).idxInData;
+    }
+
+    public getEmbById(id: string): number[] {
+        const idx = this.isExist(id);
+        console.log('in history? ' + idx);
+        return this.voxelIdxHistory.getElement(idx).embedding;
     }
 
     public popHead() {

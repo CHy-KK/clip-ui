@@ -84,6 +84,9 @@ export class MainController extends Component {
     @property(Node)
     public readonly quadPanelNode: Node = null;
 
+    @property(Node)
+    public readonly detailInfoNode: Node = null;
+
     private data: DataPoint[] = [];
     private dataRatio: number = 1;
     private typeDict: Map<string, number> = new Map();
@@ -119,6 +122,7 @@ export class MainController extends Component {
     private voxelReadHTML: HTMLInputElement = null;
     private voxelDownLoadLinkHTML: HTMLAnchorElement = null;
     private imageReadHTML: HTMLInputElement = null;
+    private contourData = [];
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -141,6 +145,8 @@ export class MainController extends Component {
     private togglesParentNode: Node = null;     // 控制当前生成等高线图的中心类别节点
     private curToggle: number = 0;              
     // private drawEditLock: LockAsync = new LockAsync();
+
+    // TODO：把上传体素接口完成，把文本获取体素接口完成
 
     start() {
         // 界面初始化
@@ -243,6 +249,10 @@ export class MainController extends Component {
                     try {
                         const receiveData = JSON.parse(xhr.response);
                         const rawVoxelData = receiveData[1];  
+                        const emb = receiveData[2];
+                        for (let i = 0; i < emb.length; i++) {
+                            emb[i] = parseInt(emb[i]);
+                        }
                         const fileName = receiveData[0][0];
                         console.log(receiveData);
                         console.log(fileName);  
@@ -261,13 +271,15 @@ export class MainController extends Component {
     
                         // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
                         // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-                        if (!this.voxelDataHistory.push(voxelData, fileName, -1)) {   // 如果队列满了则pop掉队首
+                        // TODO: 后端接上embedding
+                        if (!this.voxelDataHistory.push(voxelData, fileName, emb, -1)) {   // 如果队列满了则pop掉队首
                             this.voxelDataHistory.popHead();
-                            this.voxelDataHistory.push(voxelData, fileName, -1);
+                            this.voxelDataHistory.push(voxelData, fileName, emb, -1);
                         }   
                         
                         this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                         this.renderVoxelSelect(fileName, true);
+                        this.drawDetailInfoNode(emb);
                     } catch (e) {
                         console.error('传送图片获取体素失败');
                     }
@@ -321,7 +333,7 @@ export class MainController extends Component {
         this.drawScatter(this.scatterRect, this.scatterRange);
         this.isInitialize = true;
         /************* test code *************/
-        this.drawHistoryBg();
+        this.drawContainerBg();
 
     }
 
@@ -372,7 +384,7 @@ export class MainController extends Component {
         return vc;
     }
 
-    private drawHistoryBg() {
+    private drawContainerBg() {
         // OutterUI history background
         this.historyBgGraph.fillColor.fromHEX('#656565');
         this.historyBgGraph.moveTo(150, 210);
@@ -406,6 +418,27 @@ export class MainController extends Component {
         this.innerHistoryGraph.arc(50, 210, 30, angle2radian(90), angle2radian(0), false);
         this.innerHistoryGraph.arc(10, 210, 30, angle2radian(180), angle2radian(90), false);
         this.innerHistoryGraph.fill();
+
+        // InnerUI detail info background
+        this.innerHistoryGraph.fillColor.fromHEX('#eeeeee');
+        this.innerHistoryGraph.moveTo(100, -160);
+        this.innerHistoryGraph.lineTo(115, -175);
+        this.innerHistoryGraph.lineTo(275, -175);
+        this.innerHistoryGraph.lineTo(290, -160);
+        this.innerHistoryGraph.lineTo(290, 225);
+        this.innerHistoryGraph.lineTo(275, 240);
+        this.innerHistoryGraph.lineTo(115, 240);
+        this.innerHistoryGraph.lineTo(100, 225);
+        this.innerHistoryGraph.lineTo(100, -160);
+        this.innerHistoryGraph.arc(115, -160, 15, angle2radian(-90), angle2radian(-180), false);
+        this.innerHistoryGraph.arc(275, -160, 15, angle2radian(0), angle2radian(-90), false);
+        this.innerHistoryGraph.arc(275, 225, 15, angle2radian(90), angle2radian(0), false);
+        this.innerHistoryGraph.arc(115, 225, 15, angle2radian(180), angle2radian(90), false);
+        this.innerHistoryGraph.fill();
+
+        // temp
+        
+
     }
 
    
@@ -648,7 +681,11 @@ export class MainController extends Component {
                             }
                         }
                     }
-                    this.voxelDataHistory.push(vd, id, parseInt(id));
+                    const emb = [];
+                    for (let i = 0; i < 64; i++) {
+                        emb.push(randomRange(-1, 1));
+                    }
+                    this.voxelDataHistory.push(vd, id, emb, parseInt(id));
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                     this.renderVoxelSelect(id, true);
                 }
@@ -919,10 +956,11 @@ export class MainController extends Component {
                 // 初始化toggles
                 const toggleChildList = this.togglesParentNode.children;
                 toggleChildList[0].active = true;
-                for (let i = 1; i <= this.typeDict.size; i++) {
-                    toggleChildList[i].active = true;
-                    toggleChildList[i].getComponent(Sprite).color.fromHEX(type2Color[i]);
-                }
+                this.typeDict.forEach((value, key) => {
+                    console.log(key, value);
+                    toggleChildList[value + 1].active = true;
+                    toggleChildList[value + 1].name = key;
+                });
 
                 // 初始化散点图绘制
                 this.scatterGraph.clear();
@@ -967,7 +1005,13 @@ export class MainController extends Component {
         xhr.open('GET', url, true);
         xhr.onreadystatechange = () => { 
             if (xhr.readyState === 4 && xhr.status === 200) { 
-                const rawVoxelData = JSON.parse(xhr.responseText);
+                const responseVoxel = JSON.parse(xhr.responseText);
+                const rawVoxelData = responseVoxel[0];
+                const emb = responseVoxel[1];
+                console.log('get embedding: ' + emb);
+                for (let i = 0; i < emb.length; i++) {
+                    emb[i] = parseInt(emb[i]);
+                }
                 let voxelData: Vec3[] = [];
                 
                 // if (PREVIEW) 
@@ -982,16 +1026,19 @@ export class MainController extends Component {
                         }
                     }
                 }
-
+  
                 // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
                 // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
+                if (!this.voxelDataHistory.push(voxelData, id, emb, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? idx0 : -1);
+                    this.voxelDataHistory.push(voxelData, id, emb, idx1 === -1 ? idx0 : -1);
                 }   
                 
                 this.isGetVoxelFinished = true;
                 this.node.emit(GET_VOXEL_FINISH_EVENT);
+                this.drawDetailInfoNode(emb);
+                // TODO: 让后端接上emb，设置全局的当前体素以及体素embedding以及等高线信息，在toggle中切换
+
             }  
         };  
 
@@ -1211,6 +1258,13 @@ export class MainController extends Component {
                 if (xhr.readyState === 4 && xhr.status === 200) { 
                     const data = JSON.parse(xhr.response);
                     const encoded_image = 'data:image/png;base64,' + data.image;
+                    this.contourData = data.levelInfo;
+                    console.log(this.contourData);
+                    // TODO:　让后端接上这个levelinfo
+                    // for (let i = 0; i < levelInfo.length; i++) {
+                    //     const col = new Color(levelInfo[i][0][0], levelInfo[i][0][1], levelInfo[i][0][2]);
+                    //     const zVal = levelInfo[i][1];
+                    // }
 
                     const image = new Image();
                     image.onload = () => {
@@ -1225,6 +1279,8 @@ export class MainController extends Component {
                         this.isSampleChange = false;
                     }
                     image.src = encoded_image;
+
+                    this.drawDetailInfoContour();
                 }  
             };
             console.log('send contout request');
@@ -1242,6 +1298,146 @@ export class MainController extends Component {
         const idx = parseInt(customEventData);
         const childList = this.togglesParentNode.children;
         childList[0].setPosition(childList[idx].position);
+        childList[0].children[0].getComponent(Label).string = childList[idx].name;
         this.curToggle = idx - 1;
+        this.contourBg.active = false;
+        this.isSampleChange = true;
+    }
+
+    private drawDetailInfoNode(emb: number[]) {
+        // 绘制该体素向量详细信息
+        const embLen = emb.length;
+        this.detailInfoNode.destroyAllChildren();
+        const diGraph = this.detailInfoNode.getComponent(Graphics);
+        diGraph.clear();
+        console.log(diGraph);
+        diGraph.lineWidth = 360 / embLen;
+        for (let i = 0, y = -20 - diGraph.lineWidth * 0.5; i < embLen; i++, y -= diGraph.lineWidth) {
+            diGraph.strokeColor = new Color(lerp(0, 255, Math.max(0, -emb[i])), 170, lerp(0, 255, Math.max(0, emb[i])));
+            diGraph.moveTo(50, y);
+            diGraph.lineTo(50 + 40 * emb[i], y);
+            diGraph.stroke();
+        }
+        diGraph.lineWidth = 2;
+        diGraph.strokeColor.fromHEX('#555555');
+        diGraph.moveTo(50, -10);
+        diGraph.lineTo(50, -390);
+        diGraph.stroke();
+        diGraph.rect(7, -400, 6, 6);
+        diGraph.fillColor = new Color(255, 170, 0);
+        diGraph.fill();
+        diGraph.rect(87, -400, 6, 6);
+        diGraph.fillColor = new Color(0, 170, 255);
+        diGraph.fill();
+        const embDimLabelNode = new Node();
+        const embDimLabel = embDimLabelNode.addComponent(Label);
+        embDimLabel.string = embLen.toString();
+        embDimLabel.color.fromHEX('#333333');
+        embDimLabel.fontSize = 10;
+        embDimLabel.isItalic = true;
+        this.detailInfoNode.addChild(embDimLabelNode);
+        embDimLabelNode.setPosition(50, -395);
+        embDimLabelNode.layer = this.detailInfoNode.layer;
+    }
+
+    private drawDetailInfoContour() {
+        this.detailInfoNode.destroyAllChildren();
+        const diGraph = this.detailInfoNode.getComponent(Graphics);
+        diGraph.clear();
+
+        const levelLabelNode = new Node();
+        const levelLabel = levelLabelNode.addComponent(Label);
+        const uiTrans = levelLabelNode.getComponent(UITransform);
+        uiTrans.setAnchorPoint(0, 0.5);
+        levelLabel.string = 'Contour Level';
+        levelLabel.color.fromHEX('#333333');
+        levelLabel.fontSize = 17;
+        levelLabel.isItalic = true;
+        this.detailInfoNode.addChild(levelLabelNode);
+        levelLabelNode.setPosition(25, -15);
+        levelLabelNode.layer = this.detailInfoNode.layer;
+        
+        const lineHeight = 360 / this.contourData.length;   
+        diGraph.lineWidth = 3;
+        for (let i = 0, y = -30 - lineHeight * 0.5; i < this.contourData.length; i++, y -= lineHeight) {
+            diGraph.strokeColor = new Color(this.contourData[i][0][0], this.contourData[i][0][1], this.contourData[i][0][2]);
+            diGraph.moveTo(20, y);
+            diGraph.lineTo(60, y);
+            diGraph.stroke();
+            const levelLabelNode = new Node();
+            const levelLabel = levelLabelNode.addComponent(Label);
+            const uiTrans = levelLabelNode.getComponent(UITransform);
+            uiTrans.setAnchorPoint(0, 0.5);
+            levelLabel.string = this.contourData[i][1].toFixed(2);
+            levelLabel.color.fromHEX('#333333');
+            levelLabel.fontSize = Math.min(15, lineHeight - 3);
+            levelLabel.isItalic = true;
+            this.detailInfoNode.addChild(levelLabelNode);
+            levelLabelNode.setPosition(63, y);
+            levelLabelNode.layer = this.detailInfoNode.layer;
+        }
+        diGraph.strokeColor.fromHEX('#555555');
+        diGraph.moveTo(20, -10);
+        diGraph.lineTo(20, -390);
+        diGraph.stroke();
+    }
+
+    public onDetailInfoSelectClick(e: Event, customEventData: string) {
+        console.log(customEventData);
+        switch(customEventData) {
+            case 'node':
+                this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(this.curSelectVoxelId));
+                break;
+            case 'contour':
+                this.drawDetailInfoContour();
+                break;
+        }
+    }
+
+    public onGetVoxelByTextButtonClick(e: Event) {
+        const textInputNode = director.getScene().getChildByPath('mainUI/InnerUI/textInput/TEXT_LABEL');
+        const inStr = textInputNode.getComponent(Label).string;
+        console.log(inStr);
+        let formData = new FormData();  
+        formData.append("prompt", inStr);
+    
+        let xhr = new XMLHttpRequest();  
+        xhr.open('POST', SERVER_HOST + RequestName.SendPrompt, true);  
+        xhr.onload = () => {  
+            if (xhr.status === 200) {  
+                const receiveData = JSON.parse(xhr.response);
+                const fileName = receiveData[0];
+                const rawVoxelData = receiveData[1];  
+                const emb = receiveData[2];
+                for (let i = 0; i < emb.length; i++) {
+                    emb[i] = parseInt(emb[i]);
+                }
+                // 最好解决一下上传prompt重名的问题
+                let voxelData: Vec3[] = [];
+
+                for (let x = 0; x < 64; x++) {
+                    for (let y = 0; y < 64; y++) {
+                        for (let z = 0; z < 64; z++) {
+                            if (rawVoxelData[z][y][x]) {
+                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                            }
+                        }
+                    }
+                }
+
+                // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
+                // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                // TODO: 后端接上embedding
+                if (!this.voxelDataHistory.push(voxelData, fileName, emb, -1)) {   // 如果队列满了则pop掉队首
+                    this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push(voxelData, fileName, emb, -1);
+                }   
+                
+                this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+                this.renderVoxelSelect(fileName, true);
+                this.drawDetailInfoNode(emb);
+            }  
+        };  
+        xhr.send(formData);  
     }
 }

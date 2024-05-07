@@ -39,6 +39,7 @@ export class SnapShotNode extends Component {
             }
         } else {
             this.controller.renderVoxelSelect(this.vid, false);
+            this.controller.onDetailInfoSelectClick(new Event(''), 'node');
         }
     }
 }
