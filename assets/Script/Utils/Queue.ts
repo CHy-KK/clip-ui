@@ -145,8 +145,7 @@ export class VoxelHistoryQueue {
 
     public getEmbById(id: string): number[] {
         const idx = this.isExist(id);
-        console.log('in history? ' + idx);
-        return this.voxelIdxHistory.getElement(idx).embedding;
+        return idx === -1 ? null : this.voxelIdxHistory.getElement(idx).embedding;
     }
 
     public popHead() {
@@ -234,9 +233,9 @@ export class Queue<T> {
     }
 
     public getElement(idx: number): T {
-        if (idx > this.length) {
+        if (idx > this.length || idx === -1) {
             if (PREVIEW)
-                console.error('array out of bounds!!');
+                console.warn('array out of bounds OR element not in queue!!');
             return null;
         }
         return this.data[(this.headIdx + idx) % this.maxLength];

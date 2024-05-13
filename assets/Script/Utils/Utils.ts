@@ -37,14 +37,15 @@ export enum RequestName {
     GetVoxel = '/get_voxel',
     SendImage = '/get_embeddings_by_image',
     GetContour = '/get_contour_img',
-    SendPrompt = '/get_voxel_by_prompt'
+    SendPrompt = '/get_embeddings_by_text_query'
 };
 
 export enum SelectingType {
     None = 0,
     Single = 1,
     Range = 2,
-    Multi = 3
+    Multi = 3,
+    Two = 4
 };
 
 export enum SnapShotState {
