@@ -89,7 +89,6 @@ export class MaskSlide extends Component {
         const thisPos = new Vec2(this.node.position.x, this.node.position.y);
         const curPos = Vec2.add(new Vec2(), thisPos, Vec2.multiplyScalar(new Vec2(), offset, this.moveSpeed));
         const childList = this.node.children;
-        console.log(childList);
         if (childList.length == 0)
             return;
         // const chdTail = new Vec2(childList[0].position.x, childList[0].position.y);
@@ -101,21 +100,17 @@ export class MaskSlide extends Component {
         // 列表最后一个节点距离tailpos距离，以tail pos - tail child pos> 0为正方向
         const tailDis = Vec2.distance(this.tailPos, curTailPos) * (Vec2.dot(this.moveDir, Vec2.subtract(new Vec2(), this.tailPos, curTailPos)) > 0 ? 1 : -1);
         const dir = Vec2.dot(offset, this.moveDir);
-        console.log(headDis.toFixed(5), tailDis.toFixed(5));
         // 限定安全距离
         if ((tailDis >= 0 && dir > 0) || (headDis > 0 && dir < 0)) {
             // let move: Vec2 = this.moveSpeed * offset;
             offset.multiplyScalar(this.moveSpeed);
-            console.log('正常：' + offset);
             this.node.translate(new Vec3(offset.x, offset.y, 0));
         } else if (dir > 0 && tailDis < 0) {
             offset = Vec2.subtract(new Vec2(), this.tailPos, Vec2.add(new Vec2(), this.historyListHeadToTail, thisPos));
-            console.log('超出tail：' + offset);
             // 这里不要乘speed！
             this.node.translate(new Vec3(offset.x, offset.y, 0));
         } else if (dir < 0 && headDis < 0) {
             offset = Vec2.subtract(new Vec2(), thisPos, this.originPos);
-            console.log('超出head：' + offset);
             // 这里不要乘speed！
             this.node.position = new Vec3(this.originPos.x, this.originPos  .y, 0);
         }
@@ -139,9 +134,7 @@ export class MaskSlide extends Component {
 
     onTouchMove(e: EventTouch) {
         if (this.isClickIn) {
-            console.log('movedir: ' + this.moveDir);
             const offset = Vec2.multiplyScalar(new Vec2, this.moveDir, Vec2.dot(e.getDelta(), this.moveDir));
-            console.log('offset: ' + offset);
             this.translateCamera(Vec2.multiplyScalar(new Vec2(), offset, 0.1));
             // getMilliseconds()的范围为0-1000
             const curMoveTime = (new Date()).getMilliseconds();  
@@ -163,7 +156,6 @@ export class MaskSlide extends Component {
     
 
     onTouchStart(e: EventTouch) {
-        console.log(this.controller?.isOutUI() ? 'out' : 'in');
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         const pos: Vec2 = e.touch.getUILocation();
@@ -173,7 +165,6 @@ export class MaskSlide extends Component {
             const posChdTail = new Vec2(childList[0].position.x, childList[0].position.y);
             Vec2.subtract(this.historyListHeadToTail, posChdTail, posChdHead);
             this.isClickIn = true;
-            console.log('命中');
         } 
         this.isInertia = false;
     }

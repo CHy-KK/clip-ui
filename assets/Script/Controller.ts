@@ -151,6 +151,8 @@ export class MainController extends Component {
     private curToggle: number = 0;              
     private curSelectCompareId: string[] = [];
     private compareVoxelSet: Map<number, number> = new Map();
+    private isRenderCompare: boolean = false;
+    private selectSnapNode: Node[] = [];
     // private drawEditLock: LockAsync = new LockAsync();
 
     // TODO：把上传体素接口完成
@@ -226,12 +228,10 @@ export class MainController extends Component {
         this.voxelReadHTML.setAttribute('type', 'file');
         this.voxelReadHTML.addEventListener('change', (event) => {  
             console.log('file input!!');
-            const file = (event.target as HTMLInputElement).files[0]
-            console.log(file);  
+            const file = (event.target as HTMLInputElement).files[0];
             const reader = new FileReader();  
             reader.onload = (e) => {  
                 const fileData = e.target.result; 
-                console.log(fileData);
                 const vd = [new Vec3()];
                 this.sendVoxelToServer(vd);
             };  
@@ -263,9 +263,6 @@ export class MainController extends Component {
                         for (let i = 0; i < emb.length; i++) {
                             emb[i] = parseFloat(emb[i]);
                         }
-                        console.log(receiveData);
-                        console.log(fileName);  
-                        console.log(rawVoxelData);  
                         let voxelData: Vec3[] = [];
     
                         for (let x = 0; x < 64; x++) {
@@ -298,48 +295,48 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        for (let i = 0; i < 1000; i++) { 3
-            const typeStr = randomRangeInt(0, 10).toString();
+        // for (let i = 0; i < 1000; i++) { 3
+        //     const typeStr = randomRangeInt(0, 10).toString();
                     
-            if (!this.typeDict.has(typeStr)) {
-                this.typeDict.set(typeStr, this.typeDict.size);
-            }
-            this.data.push({
-                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-                screenPos: new Vec2(0, 0),
-                value: 0,
-                idx: i,
-                type: this.typeDict.get(typeStr),
-                name: i.toString()
-            })
-        }
+        //     if (!this.typeDict.has(typeStr)) {
+        //         this.typeDict.set(typeStr, this.typeDict.size);
+        //     }
+        //     this.data.push({
+        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+        //         screenPos: new Vec2(0, 0),
+        //         value: 0,
+        //         idx: i,
+        //         type: this.typeDict.get(typeStr),
+        //         name: i.toString()
+        //     })
+        // }
 
-        if (this.data.length > 0) {
-            this.scatterRange = {
-                left: this.data[0].dataPos.x, 
-                right: this.data[0].dataPos.x, 
-                bottom: this.data[0].dataPos.y, 
-                top: this.data[0].dataPos.y
-            };
-        }
-        this.data.forEach(value => {
-            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        })
-        const toggleChildList = this.togglesParentNode.children;
-        toggleChildList[0].active = true;
-        for (let i = 1; i <= this.typeDict.size; i++) {
-            toggleChildList[i].active = true;
-            const toggleSp = toggleChildList[i].getComponent(Sprite);
-            toggleSp.color.fromHEX(type2Color[i - 1]);
-            console.log(toggleSp.color);
-        }
-        this.drawAxis(this.scatterRect);
-        this.drawAxisScale(this.scatterRect, this.scatterRange);
-        this.drawScatter(this.scatterRect, this.scatterRange);
-        this.isInitialize = true;
+        // if (this.data.length > 0) {
+        //     this.scatterRange = {
+        //         left: this.data[0].dataPos.x, 
+        //         right: this.data[0].dataPos.x, 
+        //         bottom: this.data[0].dataPos.y, 
+        //         top: this.data[0].dataPos.y
+        //     };
+        // }
+        // this.data.forEach(value => {
+        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        // })
+        // const toggleChildList = this.togglesParentNode.children;
+        // toggleChildList[0].active = true;
+        // for (let i = 1; i <= this.typeDict.size; i++) {
+        //     toggleChildList[i].active = true;
+        //     const toggleSp = toggleChildList[i].getComponent(Sprite);
+        //     toggleSp.color.fromHEX(type2Color[i - 1]);
+        //     console.log(toggleSp.color);
+        // }
+        // this.drawAxis(this.scatterRect);
+        // this.drawAxisScale(this.scatterRect, this.scatterRange);
+        // this.drawScatter(this.scatterRect, this.scatterRange);
+        // this.isInitialize = true;
         /************* test code *************/
         this.drawContainerBg();
 
@@ -594,6 +591,8 @@ export class MainController extends Component {
     }
 
     private renderVoxelCompare() {
+        if (this.curSelectCompareId.length !== 2) 
+            return;
         let i = 0;
         const childList = this.VoxelNodeSelect.children;
 
@@ -607,12 +606,14 @@ export class MainController extends Component {
             }
             const sv = childList[i];
             let k = key;
-            const x = k % 10000;
+            const x = k % 100;
             k = (k - x) / 100;
             const y = k % 100;
             const z = (k - y) / 100;
             assert(x + y * 100 + z * 10000 === key, '坐标计算错误');
-            sv.position = new Vec3(x, y, z);
+            if (x + y * 100 + z * 10000 !== key)
+                console.error("wrong!!");
+            sv.position = new Vec3(x - 32, y - 32, z - 32);
             sv.active = true;
             const mr = (sv.getComponent(MeshRenderer) as RenderableComponent);
             if (value === 0) 
@@ -627,6 +628,8 @@ export class MainController extends Component {
         while (i < childList.length && childList[i].active) {
             childList[i++].active = false;
         }
+        this.isRenderCompare = true;
+        console.log('render compare voxel finished');
     }
 
     public renderVoxelSelect(id: string, needSnapShot: boolean) {
@@ -645,6 +648,7 @@ export class MainController extends Component {
             const sv = childList[i];
             // sv.position = (new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z)).multiplyScalar(voxelScale.Select);
             sv.position = voxelData[i];
+            
             sv.active = true;
             const mr = (sv.getComponent(MeshRenderer) as RenderableComponent);
             mr.setMaterialInstance(this.voxelMatDefault, 0);
@@ -659,6 +663,7 @@ export class MainController extends Component {
             this.isSnapShotReady = SnapShotState.wait1frame;
             this.snapShotId = id;
         }
+        this.isRenderCompare = false;
     }
 
     private snapShotVoxel = (msg) => {
@@ -942,6 +947,7 @@ export class MainController extends Component {
     public onInitializeButtonClick() {    
         if (this.isInitialize)
             return;
+        console.log('initializing');
         let xhr = new XMLHttpRequest();
         let url = SERVER_HOST + RequestName.InitializeOverview;
         
@@ -1049,8 +1055,6 @@ export class MainController extends Component {
                 const responseVoxel = JSON.parse(xhr.responseText);
                 const rawVoxelData = responseVoxel[0];
                 const emb = responseVoxel[1][0];
-                console.log(responseVoxel);
-                console.log(emb[0]);
                 for (let i = 0; i < emb.length; i++) {
                     emb[i] = parseFloat(emb[i]);
                 }
@@ -1078,8 +1082,7 @@ export class MainController extends Component {
                 
                 this.isGetVoxelFinished = true;
                 this.node.emit(GET_VOXEL_FINISH_EVENT);
-                this.drawDetailInfoNode(emb);
-
+                // this.drawDetailInfoNode(emb);
             }  
         };  
 
@@ -1097,6 +1100,7 @@ export class MainController extends Component {
             console.log('get voxel finished');
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
+        this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
         this.renderVoxelSelect(id, needSnapShot);
     }
 
@@ -1161,47 +1165,45 @@ export class MainController extends Component {
             await this.waitUntilGetVoxelFnish();
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
+        this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
         this.renderVoxelSelect(id, needSnapShot);
     }
 
     // TODO: 要能点击snapshotnode也能看比较
 
-    public onCompareNodeButtonClick() {
+    public async onCompareNodeButtonClick() {
         const id1 = this.selectDataList[0].toString();
         const id2 = this.selectDataList[1].toString();
         this.curSelectCompareId = [];
         this.curSelectCompareId.push(id1);
         this.curSelectCompareId.push(id2);
         
+        // 必须要先获取体素才能生成比较
+        if (this.voxelDataHistory.isExist(id1) === -1 || this.voxelDataHistory.isExist(id2) === -1) 
+            return;            
+        
 
-        if (this.voxelDataHistory.isExist(id1) === -1) {
-            this.getVoxelFromServer(id1, this.selectDataList[0]);
-        }
-
-        if (this.voxelDataHistory.isExist(id2) === -1) {
-            this.getVoxelFromServer(id1, this.selectDataList[1]);
-        }
 
         const v1 = this.voxelDataHistory.getVoxelById(this.curSelectCompareId[0]);
-        const v2 = this.voxelDataHistory.getVoxelById(this.curSelectCompareId[0]);
+        const v2 = this.voxelDataHistory.getVoxelById(this.curSelectCompareId[1]);
         
         this.compareVoxelSet.clear();
         assert(this.compareVoxelSet.size !== 0, 'compare set not clear');
 
         v1.forEach((value: Vec3) => {
-            this.compareVoxelSet.set(value.x + value.y * 100 + value.z * 10000, 1);
+            this.compareVoxelSet.set(value.x + 32 + (value.y + 32) * 100 + (value.z + 32) * 10000, 1);
         });
 
         v2.forEach((value: Vec3) => {
-            const idx = value.x + value.y * 100 + value.z * 10000;
+            const idx = value.x + 32 + (value.y + 32) * 100 + (value.z + 32) * 10000;
             if (this.compareVoxelSet.has(idx))
                 this.compareVoxelSet.set(idx, 0);
             else
                 this.compareVoxelSet.set(idx, 2);
         });
+        
         this.drawDetailCompare();
         this.renderVoxelCompare();
-
     }
 
     private clearAllStates() {
@@ -1374,13 +1376,13 @@ export class MainController extends Component {
     }
 
     private drawDetailInfoNode(emb: number[]) {
+        this.detailInfoNode.destroyAllChildren();
+        const diGraph = this.detailInfoNode.getComponent(Graphics);
+        diGraph.clear();
         if (!emb) 
             return;
         // 绘制该体素向量详细信息
         const embLen = emb.length;
-        this.detailInfoNode.destroyAllChildren();
-        const diGraph = this.detailInfoNode.getComponent(Graphics);
-        diGraph.clear();
         diGraph.lineWidth = 360 / embLen;
         let minVal = -0.000001;
         let maxVal = 0.000001;
@@ -1438,16 +1440,19 @@ export class MainController extends Component {
     }
 
     private drawDetailCompare() {
+        console.log('in draw detail');
+        this.detailInfoNode.destroyAllChildren();
+        const diGraph = this.detailInfoNode.getComponent(Graphics);
+        diGraph.clear();
+        if (this.curSelectCompareId.length !== 2)
+            return;
         const emb1 = this.voxelDataHistory.getEmbById(this.curSelectCompareId[0]); 
         const emb2 = this.voxelDataHistory.getEmbById(this.curSelectCompareId[1])
         // 先用drawDetailInfoNode画一个emb然后再做第二个emb的差异化
         if (!emb1 || !emb2)
             return;
-        
+        console.log('get embs');
         const embLen = emb1.length;
-        this.detailInfoNode.destroyAllChildren();
-        const diGraph = this.detailInfoNode.getComponent(Graphics);
-        diGraph.clear();
         diGraph.lineWidth = 360 / embLen;
         let minVal = -0.000001;
         let maxVal = 0.000001;
@@ -1484,6 +1489,14 @@ export class MainController extends Component {
         diGraph.rect(177, -390, 6, 6);
         diGraph.fillColor = new Color(0, 170, 255);
         diGraph.fill();
+        
+        diGraph.rect(17, -10, 6, 6);
+        diGraph.fillColor = new Color(0, 100, 200);
+        diGraph.fill();
+        diGraph.rect(177, -10, 6, 6);
+        diGraph.fillColor = new Color(210, 100, 0);
+        diGraph.fill();
+
         const embDimLabelNode = new Node();
         const embDimLabel = embDimLabelNode.addComponent(Label);
         embDimLabel.string = embLen.toString();
@@ -1513,6 +1526,26 @@ export class MainController extends Component {
         this.detailInfoNode.addChild(maxValLabelN);
         maxValLabelN.setPosition(177, -395);
         maxValLabelN.layer = this.detailInfoNode.layer;
+
+        const maxValLabelV1N = new Node();
+        const maxValLabel1 = maxValLabelV1N.addComponent(Label);
+        maxValLabel1.string = this.curSelectCompareId[0];
+        maxValLabel1.color.fromHEX('#333333');
+        maxValLabel1.fontSize = 10;
+        maxValLabel1.isItalic = true;
+        this.detailInfoNode.addChild(maxValLabelV1N);
+        maxValLabelV1N.setPosition(17, -15);
+        maxValLabelV1N.layer = this.detailInfoNode.layer;
+
+        const maxValLabelV2N = new Node();
+        const maxValLabel2 = maxValLabelV2N.addComponent(Label);
+        maxValLabel2.string = this.curSelectCompareId[1];
+        maxValLabel2.color.fromHEX('#333333');
+        maxValLabel2.fontSize = 10;
+        maxValLabel2.isItalic = true;
+        this.detailInfoNode.addChild(maxValLabelV2N);
+        maxValLabelV2N.setPosition(177, -15);
+        maxValLabelV2N.layer = this.detailInfoNode.layer;
     }
 
     private drawDetailInfoContour() {
@@ -1567,10 +1600,9 @@ export class MainController extends Component {
                 this.drawDetailInfoContour();
                 break;
             case 'compare':
-                if (this.curSelectCompareId.length === 2) {
-                    this.drawDetailCompare();
+                this.drawDetailCompare();
+                if (!this.isRenderCompare)
                     this.renderVoxelCompare();
-                }
                 break;
         }
     }
@@ -1619,5 +1651,13 @@ export class MainController extends Component {
             }  
         };  
         xhr.send(formData);  
+    }
+    
+    public showSnapSelect(snode: Node) {
+        this.voxelDataHistory.showSnapSelect(snode);
+        if (this.voxelDataHistory.selectSnapNode.length === 2) 
+            this.SelectTwoButtons.active = true;
+        else 
+            this.SelectTwoButtons.active = false;
     }
 }

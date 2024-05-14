@@ -1,4 +1,4 @@
-import { Sprite, Texture2D, Vec3, Node, Label, UITransform, director, SpriteFrame, Overflow } from "cc";
+import { Sprite, Texture2D, Vec3, Node, Label, UITransform, director, SpriteFrame, Overflow, Graphics } from "cc";
 import { PREVIEW } from "cc/env";
 import { InOrOut, SnapShotNode } from "../SnapShotNode";
 
@@ -13,6 +13,7 @@ export class VoxelHistoryQueue {
 
     private rawVoxelDataHistory: Queue<Vec3[]>; 
     private voxelIdxHistory: Queue<VoxelRecord>;
+    public selectSnapNode: Node[] = [];
     private outHistoryListNode: Node = null;
     private innerHistoryListNode: Node = null;
     private maxLength: number;
@@ -157,8 +158,11 @@ export class VoxelHistoryQueue {
         if (childListO.length > this.maxLength) {
             const chtailO = childListO[0];
             const chtailI = childListI[0];
-            this.outHistoryListNode.removeChild(childListO[0]);
-            this.innerHistoryListNode.removeChild(childListI[0]);
+            this.outHistoryListNode.removeChild(chtailO);
+            this.innerHistoryListNode.removeChild(chtailI);
+            if ((this.selectSnapNode.length === 2 && chtailI === this.selectSnapNode[1]) || (this.selectSnapNode.length !== 0 && chtailI === this.selectSnapNode[0])) 
+                this.selectSnapNode.pop();
+                
             chtailO.destroy();
             chtailI.destroy();
         }
@@ -174,6 +178,41 @@ export class VoxelHistoryQueue {
 
     public length() {
         return this.rawVoxelDataHistory.length;
+    }
+
+    public showSnapSelect(snode: Node) {
+        
+        if (this.selectSnapNode.length === 2 && snode === this.selectSnapNode[1]) {
+            const gnode = snode.children[snode.children.length - 1];
+            snode.removeChild(gnode);
+            gnode.destroy();
+            this.selectSnapNode.pop();
+            return;
+        } else if (this.selectSnapNode.length !== 0 && snode === this.selectSnapNode[0]) {
+            const gnode = snode.children[snode.children.length - 1];
+            snode.removeChild(gnode);
+            gnode.destroy();
+            if (this.selectSnapNode.length === 2)
+                this.selectSnapNode[0] = this.selectSnapNode[1];
+            this.selectSnapNode.pop();
+            return;
+        }
+        // 最多允许选中两个
+        if (this.selectSnapNode.length === 2)
+            return;
+        this.selectSnapNode.push(snode);
+        const graphicNode = new Node();
+        const g = graphicNode.addComponent(Graphics);
+        g.strokeColor.fromHEX('#ffff33');
+        g.lineWidth = 2;
+        g.moveTo(-41, 41);
+        g.lineTo(41, 41);
+        g.lineTo(41, -41);
+        g.lineTo(-41, -41);
+        g.lineTo(-41, 41);
+        g.stroke();
+        snode.addChild(graphicNode);
+        graphicNode.layer = snode.layer;
     }
 
 }
