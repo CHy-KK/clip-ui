@@ -215,6 +215,15 @@ export class VoxelHistoryQueue {
         graphicNode.layer = snode.layer;
     }
 
+    public clearSnapSelect() {
+        for (let i = this.selectSnapNode.length - 1; i >= 0; i--) {
+            const gnode = this.selectSnapNode[i].children[this.selectSnapNode[i].children.length - 1];
+            this.selectSnapNode[i].removeChild(gnode);
+            gnode.destroy();
+            this.selectSnapNode.pop();
+        }
+    }
+
 }
 
 

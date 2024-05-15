@@ -440,10 +440,6 @@ export class MainController extends Component {
         this.innerHistoryGraph.arc(275, 225, 15, angle2radian(90), angle2radian(0), false);
         this.innerHistoryGraph.arc(115, 225, 15, angle2radian(180), angle2radian(90), false);
         this.innerHistoryGraph.fill();
-
-        // temp
-        
-
     }
 
    
@@ -680,6 +676,19 @@ export class MainController extends Component {
         this.node.off(SNAPSHOT_FOR_NEW_VOXEL_EVENT);
     }
 
+    public view2Voxel() {
+        const snapshot = new SpriteFrame();
+        const rtData = this.selectRT.readPixels();
+        
+        const voxelTexture = new Texture2D();
+        voxelTexture.reset({ width: this.selectRT.width, height: this.selectRT.height, format: Texture2D.PixelFormat.RGBA8888, mipmapLevel: 0 })
+        voxelTexture.uploadData(rtData, 0, 0);
+        voxelTexture.updateImage();
+        snapshot.texture = voxelTexture;
+        
+
+    }
+
     public getHistoryLength() {
         return this.voxelDataHistory.length();
     }
@@ -908,6 +917,7 @@ export class MainController extends Component {
                         } else if (this.selectDataList.length === 2) {
                             this.selectType = SelectingType.Two;
                             this.SelectTwoButtons.active = true;   
+                            this.voxelDataHistory.clearSnapSelect();
                         } 
                         else {
                             this.selectType = SelectingType.Multi;
@@ -1172,8 +1182,20 @@ export class MainController extends Component {
     // TODO: 要能点击snapshotnode也能看比较
 
     public async onCompareNodeButtonClick() {
-        const id1 = this.selectDataList[0].toString();
-        const id2 = this.selectDataList[1].toString();
+        let id1, id2;
+        if (this.selectType === SelectingType.Two) {
+            id1 = this.selectDataList[0].toString();
+            id2 = this.selectDataList[1].toString();
+            if (this.voxelDataHistory.isExist(id1) === -1 || this.voxelDataHistory.isExist(id2) === -1) {
+                console.warn('当前选中点没有获取体素');
+                return;
+            }
+        } else if (this.voxelDataHistory.selectSnapNode.length === 2) {
+            id1 = this.voxelDataHistory.selectSnapNode[0].getComponent(SnapShotNode).vid;
+            id2 = this.voxelDataHistory.selectSnapNode[1].getComponent(SnapShotNode).vid;
+        } else 
+            return;
+        
         this.curSelectCompareId = [];
         this.curSelectCompareId.push(id1);
         this.curSelectCompareId.push(id2);
@@ -1181,8 +1203,6 @@ export class MainController extends Component {
         // 必须要先获取体素才能生成比较
         if (this.voxelDataHistory.isExist(id1) === -1 || this.voxelDataHistory.isExist(id2) === -1) 
             return;            
-        
-
 
         const v1 = this.voxelDataHistory.getVoxelById(this.curSelectCompareId[0]);
         const v2 = this.voxelDataHistory.getVoxelById(this.curSelectCompareId[1]);
@@ -1333,6 +1353,9 @@ export class MainController extends Component {
                     const data = JSON.parse(xhr.response);
                     const encoded_image = 'data:image/png;base64,' + data.image;
                     this.contourData = data.levelInfo;
+                    console.log('contour level info:');
+                    console.log(this.contourData);
+                    this.contourData.reverse();
                     // TODO:　让后端接上这个levelinfo
                     // for (let i = 0; i < levelInfo.length; i++) {
                     //     const col = new Color(levelInfo[i][0][0], levelInfo[i][0][1], levelInfo[i][0][2]);
@@ -1462,17 +1485,18 @@ export class MainController extends Component {
         }
         minVal = -minVal;
         for (let i = 0, y = -20 - diGraph.lineWidth * 0.5; i < embLen; i++, y -= diGraph.lineWidth) {
-            diGraph.strokeColor = new Color(0, 100, 200);
+            // 这里两个emb条的颜色是对照材质的，要修改要一起改
+            diGraph.strokeColor.fromHEX('#FC3939');
             diGraph.moveTo(100, y);
             diGraph.lineTo(100 + 80 * (emb1[i] / (emb1[i] > 0 ? maxVal : minVal)), y);
             diGraph.stroke();
             if (Math.abs(emb2[i]) < Math.abs(emb1[i])) {
-                diGraph.strokeColor = new Color(210, 100, 0);
+                diGraph.strokeColor.fromHEX('#00A828');
                 diGraph.moveTo(100, y);
                 diGraph.lineTo(100 + 80 * (emb2[i] / (emb2[i] > 0 ? maxVal : minVal)), y);
                 diGraph.stroke();
             } else {
-                diGraph.strokeColor = new Color(210, 100, 0);
+                diGraph.strokeColor.fromHEX('#00A828');
                 diGraph.moveTo(100 + 80 * (emb1[i] / (emb1[i] > 0 ? maxVal : minVal)), y);
                 diGraph.lineTo(100 + 80 * (emb2[i] / (emb2[i] > 0 ? maxVal : minVal)), y);
                 diGraph.stroke();
@@ -1484,17 +1508,17 @@ export class MainController extends Component {
         diGraph.lineTo(100, -390);
         diGraph.stroke();
         diGraph.rect(17, -390, 6, 6);
-        diGraph.fillColor = new Color(255, 170, 0);
+        diGraph.fillColor = new Color(50, 50, 50);
         diGraph.fill();
         diGraph.rect(177, -390, 6, 6);
-        diGraph.fillColor = new Color(0, 170, 255);
+        diGraph.fillColor = new Color(50, 50, 50);
         diGraph.fill();
         
         diGraph.rect(17, -10, 6, 6);
-        diGraph.fillColor = new Color(0, 100, 200);
+        diGraph.fillColor.fromHEX('#FC3939');
         diGraph.fill();
         diGraph.rect(177, -10, 6, 6);
-        diGraph.fillColor = new Color(210, 100, 0);
+        diGraph.fillColor.fromHEX('#00A828');
         diGraph.fill();
 
         const embDimLabelNode = new Node();
@@ -1568,7 +1592,7 @@ export class MainController extends Component {
         const lineHeight = 360 / this.contourData.length;   
         diGraph.lineWidth = 3;
         for (let i = 0, y = -30 - lineHeight * 0.5; i < this.contourData.length; i++, y -= lineHeight) {
-            diGraph.strokeColor = new Color(this.contourData[i][0][0], this.contourData[i][0][1], this.contourData[i][0][2]);
+            diGraph.strokeColor = new Color(this.contourData[i][0][0] * 255, this.contourData[i][0][1] * 255, this.contourData[i][0][2] * 255);
             diGraph.moveTo(20, y);
             diGraph.lineTo(60, y);
             diGraph.stroke();
@@ -1660,4 +1684,6 @@ export class MainController extends Component {
         else 
             this.SelectTwoButtons.active = false;
     }
+
+
 }
