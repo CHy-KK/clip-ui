@@ -91,6 +91,8 @@ export class EditVoxel extends Component {
     private voxelRead: HTMLInputElement = null;
     private voxelDownLoadLink: HTMLAnchorElement = null;
     private opTipLabel: Label = null;
+    /**@tip 记录当前上传体素数量，用于标识体素id */
+    private uploadNum: number = 0;
 
     /**
      * @tip 记录本次选中体素信息
@@ -183,20 +185,16 @@ export class EditVoxel extends Component {
         this.voxelRead = document.createElement('input');
         this.voxelRead.setAttribute('type', 'file');
         this.voxelRead.addEventListener('change', (event) => {  
-            console.log('file input!!');
             const file = (event.target as HTMLInputElement).files[0]
-            console.log(file);  
             const reader = new FileReader();  
             reader.onload = (e) => {  
                 try {
                     const fileData = e.target.result; 
-                    console.log(fileData);
                     const fd = JSON.parse(fileData as string);
                     const vd = new Array<Vec3>();
                     fd.forEach(element => {
                         vd.push(new Vec3(element.x, element.y, element.z));
                     });
-                    console.log(vd);
                     this.renderEditVoxel(vd);
                 } catch(e) {
                     console.error('not voxel file');
@@ -246,6 +244,15 @@ export class EditVoxel extends Component {
         this.renderEditVoxel(voxelData);
     }
 
+    public onUploadEditVoxelButtonClick() {
+        const voxelData = [];
+        const childList = this.node.children;
+        
+        for (let i = 0; i < childList.length; i++) {
+            voxelData.push(childList[i].position);
+        }
+        this.controller.uploadVoxelToServer(voxelData, `Edit-${this.uploadNum++}`);
+    }
 
     public renderEditVoxel(voxelData: Vec3[]) {
         // 把之前的所有状态清空
@@ -292,7 +299,6 @@ export class EditVoxel extends Component {
             const pos: Vec2 = e.touch.getUILocation();
             this.clickUIPos = pos;
             this.clickStartPos = e.touch.getLocation();
-            console.log('state: ' + this.editState)
             const screenRay = new geometry.Ray();
             this.curCamera.screenPointToRay(e.getLocationX(), e.getLocationY(), screenRay);
             const rayCastRes: boolean = PhysicsSystem.instance.raycastClosest(screenRay);
@@ -364,8 +370,6 @@ export class EditVoxel extends Component {
                             const castWorld4 = Vec4.transformAffine(new Vec4(), new Vec4(this.addInfo.castVoxelFace.x, this.addInfo.castVoxelFace.y, this.addInfo.castVoxelFace.z, 0), this.node.getWorldMatrix()); 
                             this.addInfo.castFaceWorld = new Vec3(castWorld4.x, castWorld4.y, castWorld4.z)
                             this.addInfo.castFaceWorld.normalize();
-                            console.log('cast face' + this.addInfo.castVoxelFace);
-                            console.log('cast world' + this.addInfo.castFaceWorld);
                         }
                 }
             }
@@ -489,12 +493,9 @@ export class EditVoxel extends Component {
                     // 计算目标点在位移方向上的投影
                     let moveWorld = new Vec3();
                     Vec3.multiplyScalar(moveWorld, this.addInfo.castFaceWorld, Vec3.dot(this.addInfo.castFaceWorld, Vec3.subtract(new Vec3(), worldTarget, this.addInfo.castVoxelPos)));
-                    console.log('world move' + moveWorld);
                     const localMove4 = Vec4.transformAffine(new Vec4(), new Vec4(moveWorld.x, moveWorld.y, moveWorld.z, 0), this.node.getWorldMatrix().invert())
                     const localMove = new Vec3(localMove4.x, localMove4.y, localMove4.z);
-                    console.log('local move: ' + localMove4);
                     let moveNum = Vec3.dot(localMove, this.addInfo.castVoxelFace);
-                    console.log('mouse move num: ' + moveNum);
                     const negArray = this.addInfo.addArrayNegative;
                     const posArray = this.addInfo.addArrayPositive;
                     const childList = this.node.children;
@@ -657,8 +658,6 @@ export class EditVoxel extends Component {
                             childList[--this.activeEditVoxelNum].active = false;
                             addArray.pop();
                         }
-                        console.log('NEG length' + this.addInfo.addArrayNegative.length);
-                        console.log('POS length' + this.addInfo.addArrayPositive.length);
                         break;
 
                 }
@@ -693,7 +692,6 @@ export class EditVoxel extends Component {
                         this.editState = EditState.MultiSelect;
                         break;
                     case KeyCode.KEY_C:     // 复制当前选中的所有体素，进入copying状态，阻塞其他一切操作，直到粘贴或者取消复制
-                        console.log('copy');
                         if (this.selectInfo.selectNodeSet.size > 0) {
                             this.editState = EditState.Copying;
                             this.opTipLabel.string = opTipString.copy;
@@ -734,13 +732,10 @@ export class EditVoxel extends Component {
                         
                 }
             } else if (this.editState === EditState.Copying) {  // 复制模式
-                console.log('copying');
                 switch(key.keyCode) {
                     case KeyCode.KEY_V:
-                        console.log(this.selectInfo.selectNodeSet.size);
                         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                             if (this.voxelPosQuery.getData(chd.position.x, chd.position.y, chd.position.z) === null) {
-                                console.log('empty can create');
                                 if (this.activeEditVoxelNum === childList.length) {
                                     const ev = this.controller.createVoxel();
                                     this.node.addChild(ev);
@@ -751,17 +746,12 @@ export class EditVoxel extends Component {
                                 ev.setPosition(new Vec3(chd.position.x, chd.position.y, chd.position.z));
                                 ev.active = true;
                                 this.voxelPosQuery.setData(ev.position.x, ev.position.y, ev.position.z, ev);
-                
-                                console.log(ev.position);
-                                console.log(chd.position);
-                                console.log('---------------');
                             }
                         });
                         let i = this.activeEditVoxelNum;
                         while (i < childList.length && childList[i].active) {
                             childList[i++].active = false;
                         }
-                        console.log('voxel num' + this.node.children.length + '; active num' + this.activeEditVoxelNum);
                         break;
                     
                     case KeyCode.KEY_D: // 放弃粘贴，退出copying模式，删除选中记录（这里不能用重置）
@@ -852,8 +842,6 @@ export class EditVoxel extends Component {
 
     public onEditTextRAChange(text: string, editbox: EditBox, customEventData: string) {
         if (this.controller.isOutUI()) {
-            console.log(text);
-            console.log(customEventData);
             if (text.length === 0)
                 text = '0';
             const angle = parseFloat(text);

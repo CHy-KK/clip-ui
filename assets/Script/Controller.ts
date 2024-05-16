@@ -128,6 +128,7 @@ export class MainController extends Component {
     private voxelDownLoadLinkHTML: HTMLAnchorElement = null;
     private imageReadHTML: HTMLInputElement = null;
     private contourData = [];
+    private blankNum = 0;   // 白板体素编号
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -135,6 +136,9 @@ export class MainController extends Component {
     private selectMovingPos: Vec2 =  new Vec2(0);
     private isMove: boolean = false;
     private isSelectCtrl: boolean = false;
+     /**
+     * @mention 不要世界对该变量赋值，用setSelectType接口
+     */
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
@@ -233,7 +237,7 @@ export class MainController extends Component {
             reader.onload = (e) => {  
                 const fileData = e.target.result; 
                 const vd = [new Vec3()];
-                this.sendVoxelToServer(vd);
+                this.uploadVoxelToServer(vd, 'file name');
             };  
             reader.readAsText(file);  
 
@@ -710,33 +714,23 @@ export class MainController extends Component {
             }
             // TODO:test code!!连上服务器测试没问题就删掉
             else if (key.keyCode === KeyCode.KEY_A) {
-                const id = randomRangeInt(0, 10000).toString();
+                const id = `blank${this.blankNum++}`;
                 if (this.voxelDataHistory.isExist(id) === -1) {
                     if (this.voxelDataHistory.length() === this.historyMaxLength)
                         this.voxelDataHistory.popHead();
                     const vd = [];
                     // for (let i = randomRangeInt(100, 5000); i >= 0; i--)
                     //     vd.push(new Vec3(randomRangeInt(-32, 32), randomRangeInt(-32, 32), randomRangeInt(-32, 32)));
-                    if (random() < 0.5) {
-                        for (let x = -8; x < 8; x++) {
-                            for (let y = -8; y < 8; y++) {
-                                for (let z = -8; z < 8; z++) {
-                                    vd.push(new Vec3(x, y, z));
-                                }
-                            }
-                        }
-                    } else {
-                        for (let x = -20; x < -10; x++) {
-                            for (let y = -20; y < -10; y++) {
-                                for (let z = -20; z < -10; z++) {
-                                    vd.push(new Vec3(x, y, z));
-                                }
+                    for (let x = -8; x < 8; x++) {
+                        for (let y = -8; y < 8; y++) {
+                            for (let z = -8; z < 8; z++) {
+                                vd.push(new Vec3(x, y, z));
                             }
                         }
                     }
                     const emb = [];
-                    for (let i = 0; i < 64; i++) {
-                        emb.push(randomRange(-1, 1));
+                    for (let i = 0; i < 128; i++) {
+                        emb.push(0);
                     }
                     this.voxelDataHistory.push(vd, id, emb, parseInt(id));
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
@@ -774,11 +768,7 @@ export class MainController extends Component {
                 this.clickPos = pos;
 
                 if (this.selectType != SelectingType.Multi || !this.isSelectCtrl) {
-                    this.selectType = SelectingType.None;
-                    this.SelectMultiButtons.active = false;
-                    this.SelectRangeButtons.active = false;
-                    this.SelectSingleButtons.active = false;
-                    this.SelectTwoButtons.active = false;
+                    this.setSelectType(SelectingType.None);
                 }
                 // 这里也把数据点清空
                 if (!this.isSelectCtrl) {
@@ -883,14 +873,10 @@ export class MainController extends Component {
                         }
                     }
                     if (this.selectDataList.length > 0) {
-                        if (this.selectDataList.length === 1) {
-                            this.selectType = SelectingType.Single;
-                            this.SelectSingleButtons.active = true;
-                        }
-                        else {
-                            this.selectType = SelectingType.Range;
-                            this.SelectRangeButtons.active = true;
-                        }
+                        if (this.selectDataList.length === 1) 
+                            this.setSelectType(SelectingType.Single)
+                        else 
+                            this.setSelectType(SelectingType.Range)
                     }
                 } else {    // 点选
                     const tileX = Math.floor((pos.x - this.scatterRect.left) / this.tileLength);
@@ -912,16 +898,13 @@ export class MainController extends Component {
                     }
                     if (this.selectDataList.length > 0) {
                         if (!this.isSelectCtrl || this.selectDataList.length === 1) {
-                            this.selectType = SelectingType.Single;
-                            this.SelectSingleButtons.active = true;
+                            this.setSelectType(SelectingType.Single)
                         } else if (this.selectDataList.length === 2) {
-                            this.selectType = SelectingType.Two;
-                            this.SelectTwoButtons.active = true;   
+                            this.setSelectType(SelectingType.Two)
                             this.voxelDataHistory.clearSnapSelect();
                         } 
                         else {
-                            this.selectType = SelectingType.Multi;
-                            this.SelectMultiButtons.active = true;      
+                            this.setSelectType(SelectingType.Multi) 
                         }
                     }
                 }
@@ -1025,7 +1008,7 @@ export class MainController extends Component {
                 this.drawAxisScale(this.scatterRect, this.scatterRange);
                 this.drawScatter(this.scatterRect, this.scatterRange);
                 this.isInitialize = true;
-                
+                console.log('initializing finished')
             }  
         };  
         
@@ -1057,7 +1040,7 @@ export class MainController extends Component {
     private getVoxelFromServer(id: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
         let xhr = new XMLHttpRequest();
 
-        let url = SERVER_HOST + RequestName.GetVoxel + `/${idx0}-${idx1}-${idx2}-${idx3}/${xval}${xval == 0 ? '.0' : ''}-${yval}${yval == 0 ? '.0' : ''}`;
+        let url = SERVER_HOST + RequestName.GetVoxel + `/${idx0}-${idx1}-${idx2}-${idx3}/${xval.toFixed(3)}-${yval.toFixed(3)}`;
         
         xhr.open('GET', url, true);
         xhr.onreadystatechange = () => { 
@@ -1069,9 +1052,6 @@ export class MainController extends Component {
                     emb[i] = parseFloat(emb[i]);
                 }
                 let voxelData: Vec3[] = [];
-                
-                // if (PREVIEW) 
-                //     console.log(rawVoxelData); 
 
                 for (let x = 0; x < 64; x++) {
                     for (let y = 0; y < 64; y++) {
@@ -1099,6 +1079,30 @@ export class MainController extends Component {
         xhr.send();
     }
 
+    /**@tip 后端接受一个64*64*64的0 1矩阵 */
+    public uploadVoxelToServer(voxelData: Vec3[], id: string) {
+
+        const xhr = new XMLHttpRequest();
+        const url = SERVER_HOST + RequestName.UploadVoxel;
+        const formData = new FormData();  
+        formData.append('voxel', voxelData.toString());
+        
+        xhr.open('POST', url, true);
+        xhr.onreadystatechange = () => { 
+            if (xhr.readyState === 4 && xhr.status === 200) { 
+                const emb = JSON.parse(xhr.response)[0];
+                if (!this.voxelDataHistory.push(voxelData, id, emb, -1)) {
+                    this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push(voxelData, id, emb, -1);
+                }
+                this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+                this.renderVoxelSelect(id, true);
+                this.drawDetailInfoNode(emb);
+            }  
+        };
+        xhr.send(formData);
+    }
+
     public async onSingleGetVoxelButtonClick() {
         // TODO:这里的id最好还是用数据点的name
         // this.data[this.selectDataList[0]].name;
@@ -1107,7 +1111,6 @@ export class MainController extends Component {
         if (needSnapShot) {
             this.getVoxelFromServer(id, this.selectDataList[0]);
             await this.waitUntilGetVoxelFnish();
-            console.log('get voxel finished');
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
         this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
@@ -1229,11 +1232,7 @@ export class MainController extends Component {
     private clearAllStates() {
         this.scaleGraph.clear();
         this.scatterGraph.clear();
-        this.selectType = SelectingType.None;
-        this.SelectMultiButtons.active = false;
-        this.SelectTwoButtons.active = false;
-        this.SelectRangeButtons.active = false;
-        this.SelectSingleButtons.active = false;
+        this.setSelectType(SelectingType.None);
         this.SelectGraphic.destroyAllChildren();
         while (!this.isSelectCtrl && this.selectDataList.length > 0) {
             this.selectDataList.pop();
@@ -1313,9 +1312,7 @@ export class MainController extends Component {
         this.imageReadHTML.click();
     }
 
-    private sendVoxelToServer(voxel: Vec3[]) {
-        return 0;
-    }
+
 
     public onSaveVoxelToFile(type: string) {
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(this.curSelectVoxelId);
@@ -1350,11 +1347,9 @@ export class MainController extends Component {
             xhr.open('POST', url, true);
             xhr.onreadystatechange = () => { 
                 if (xhr.readyState === 4 && xhr.status === 200) { 
-                    const data = JSON.parse(xhr.response);
-                    const encoded_image = 'data:image/png;base64,' + data.image;
-                    this.contourData = data.levelInfo;
-                    console.log('contour level info:');
-                    console.log(this.contourData);
+                    const response = JSON.parse(xhr.response);
+                    const encoded_image = 'data:image/png;base64,' + response.image;
+                    this.contourData = response.levelInfo;
                     this.contourData.reverse();
                     // TODO:　让后端接上这个levelinfo
                     // for (let i = 0; i < levelInfo.length; i++) {
@@ -1388,11 +1383,30 @@ export class MainController extends Component {
         this.ScatterGraphic.active = !this.ScatterGraphic.active;
     }
 
-    public onToggleClick(e: Event, customEventData: string) {
+    public onTypeToggleClick(e: Event, customEventData: string) {
         const idx = parseInt(customEventData);
         const childList = this.togglesParentNode.children;
         childList[0].setPosition(childList[idx].position);
         childList[0].children[0].getComponent(Label).string = childList[idx].name;
+        // 再次点击类型选择button则选中所有该类型
+        if (this.curToggle === idx - 1) {
+            this.SelectGraphic.destroyAllChildren();
+            // TODO 这里其实应该遍历的是downsamplelist，也就是当前散点显示范围的list，如果不是downsample状态才遍历data列表。然后在切换其他类型时要取消当前选中
+            while (this.selectDataList.length)
+                this.selectDataList.pop();
+            this.data.forEach((value: DataPoint, index: number) => {
+                if (value.type === this.curToggle) {
+                    const selectNode = instantiate(this.SelectNode);
+                    this.ScatterGraphic.addChild(selectNode);
+                    selectNode.setPosition(new Vec3(value.screenPos.x + this.scatterRect.left, value.screenPos.y + this.scatterRect.bottom, 0));
+                    this.SelectGraphic.addChild(selectNode);
+                    this.selectDataList.push(index);
+                }
+
+            })
+
+            this.setSelectType(SelectingType.Range);
+        }
         this.curToggle = idx - 1;
         this.contourBg.active = false;
         this.isSampleChange = true;
@@ -1683,6 +1697,28 @@ export class MainController extends Component {
             this.SelectTwoButtons.active = true;
         else 
             this.SelectTwoButtons.active = false;
+    }
+
+    setSelectType(st: SelectingType) {
+        this.selectType = st;
+        this.SelectSingleButtons.active = false;
+        this.SelectMultiButtons.active = false;
+        this.SelectRangeButtons.active = false;
+        this.SelectTwoButtons.active = false;
+        switch(st) {
+            case SelectingType.Single:
+                this.SelectSingleButtons.active = true;
+                break;
+            case SelectingType.Multi:
+                this.SelectMultiButtons.active = true;
+                break;
+            case SelectingType.Range:
+                this.SelectRangeButtons.active = true;
+                break;
+            case SelectingType.Two:
+                this.SelectTwoButtons.active = true;
+                break;
+        }
     }
 
 

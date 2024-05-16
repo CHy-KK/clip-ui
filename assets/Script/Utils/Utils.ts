@@ -37,7 +37,8 @@ export enum RequestName {
     GetVoxel = '/get_voxel',
     SendImage = '/get_embeddings_by_image',
     GetContour = '/get_contour_img',
-    SendPrompt = '/get_embeddings_by_text_query'
+    SendPrompt = '/get_embeddings_by_text_query',
+    UploadVoxel = '/upload_voxel'
 };
 
 export enum SelectingType {
