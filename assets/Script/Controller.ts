@@ -6,6 +6,7 @@ import { SnapShotNode } from './SnapShotNode';
 import { LockAsync } from './Utils/Lock';
 import { PanelNode } from './PanelNode';
 import { DataPoint, RectSize, VoxelBuffer, SelectingType, SnapShotState, voxelScale, type2Color, RequestName, angle2radian, ClickState } from './Utils/Utils';
+import { QuadPanelGradient } from './QuadPanelGradient';
 const { ccclass, property } = _decorator;
 
 const SERVER_HOST = 'http://127.0.0.1:5000';    // 注意这里端口可能被占用
@@ -119,8 +120,7 @@ export class MainController extends Component {
     private quadShowSelect: RectSize;
     private isGetVoxelFinished: boolean = false;
     private voxelDataHistory: VoxelHistoryQueue;
-    private panelPosBoardX: Label = null;
-    private panelPosBoardY: Label = null;
+    private panelPosBoard: Label = null;
     private scatterRect: RectSize;
     private axisLength: number;
     private tileLength: number;
@@ -142,7 +142,7 @@ export class MainController extends Component {
     private selectType: SelectingType = SelectingType.None;
     private isSnapShotReady: SnapShotState = 0;
     private snapShotId: string = '';
-    private panelClickPos: Vec2 = new Vec2(0);
+    private panelClickPos: Vec3 = new Vec3(0);
     // private isSelect: boolean = false;
     // private isPanel: boolean = false;
     // private isRotateSelectVoxel: boolean = false;
@@ -175,8 +175,7 @@ export class MainController extends Component {
         };
         this.quadPanelPos.left = this.quadPanelPos.right - quadPanel.getComponent(UITransform).contentSize.x;
         this.quadPanelPos.bottom = this.quadPanelPos.top - quadPanel.getComponent(UITransform).contentSize.y;
-        this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
-        this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+        this.panelPosBoard = this.quadPanelNode.getChildByPath('select2/clickPos').getComponent(Label);
         this.contourBg = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/Contour');
         this.togglesParentNode = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/NodeTypeSelector');
 
@@ -299,48 +298,48 @@ export class MainController extends Component {
         });
 
         /************* test code *************/
-        // for (let i = 0; i < 1000; i++) { 3
-        //     const typeStr = randomRangeInt(0, 10).toString();
+        for (let i = 0; i < 1000; i++) { 3
+            const typeStr = randomRangeInt(0, 10).toString();
                     
-        //     if (!this.typeDict.has(typeStr)) {
-        //         this.typeDict.set(typeStr, this.typeDict.size);
-        //     }
-        //     this.data.push({
-        //         dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
-        //         screenPos: new Vec2(0, 0),
-        //         value: 0,
-        //         idx: i,
-        //         type: this.typeDict.get(typeStr),
-        //         name: i.toString()
-        //     })
-        // }
+            if (!this.typeDict.has(typeStr)) {
+                this.typeDict.set(typeStr, this.typeDict.size);
+            }
+            this.data.push({
+                dataPos: new Vec2(randomRange(-10, 10), randomRange(-10, 10)),
+                screenPos: new Vec2(0, 0),
+                value: 0,
+                idx: i,
+                type: this.typeDict.get(typeStr),
+                name: i.toString()
+            })
+        }
 
-        // if (this.data.length > 0) {
-        //     this.scatterRange = {
-        //         left: this.data[0].dataPos.x, 
-        //         right: this.data[0].dataPos.x, 
-        //         bottom: this.data[0].dataPos.y, 
-        //         top: this.data[0].dataPos.y
-        //     };
-        // }
-        // this.data.forEach(value => {
-        //     this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
-        //     this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
-        //     this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
-        //     this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
-        // })
-        // const toggleChildList = this.togglesParentNode.children;
-        // toggleChildList[0].active = true;
-        // for (let i = 1; i <= this.typeDict.size; i++) {
-        //     toggleChildList[i].active = true;
-        //     const toggleSp = toggleChildList[i].getComponent(Sprite);
-        //     toggleSp.color.fromHEX(type2Color[i - 1]);
-        //     console.log(toggleSp.color);
-        // }
-        // this.drawAxis(this.scatterRect);
-        // this.drawAxisScale(this.scatterRect, this.scatterRange);
-        // this.drawScatter(this.scatterRect, this.scatterRange);
-        // this.isInitialize = true;
+        if (this.data.length > 0) {
+            this.scatterRange = {
+                left: this.data[0].dataPos.x, 
+                right: this.data[0].dataPos.x, 
+                bottom: this.data[0].dataPos.y, 
+                top: this.data[0].dataPos.y
+            };
+        }
+        this.data.forEach(value => {
+            this.scatterRange.left = Math.min(this.scatterRange.left, value.dataPos.x);
+            this.scatterRange.right = Math.max(this.scatterRange.right, value.dataPos.x);
+            this.scatterRange.bottom = Math.min(this.scatterRange.bottom, value.dataPos.y);
+            this.scatterRange.top = Math.max(this.scatterRange.top, value.dataPos.y);
+        })
+        const toggleChildList = this.togglesParentNode.children;
+        toggleChildList[0].active = true;
+        for (let i = 1; i <= this.typeDict.size; i++) {
+            toggleChildList[i].active = true;
+            const toggleSp = toggleChildList[i].getComponent(Sprite);
+            toggleSp.color.fromHEX(type2Color[i - 1]);
+            console.log(toggleSp.color);
+        }
+        this.drawAxis(this.scatterRect);
+        this.drawAxisScale(this.scatterRect, this.scatterRange);
+        this.drawScatter(this.scatterRect, this.scatterRange);
+        this.isInitialize = true;
         /************* test code *************/
         this.drawContainerBg();
 
@@ -798,20 +797,82 @@ export class MainController extends Component {
                     break;
 
                 case ClickState.Panel:
-                    const panelWidth = (this.quadPanelPos.right - this.quadPanelPos.left);
+                    const panelWidth = this.quadPanelPos.right - this.quadPanelPos.left
                     let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
-                        (pos.y - this.quadPanelPos.bottom) / panelWidth);
+                        (pos.y - this.quadPanelPos.bottom) / panelWidth);   
                     uv.x = Math.max(0, Math.min(uv.x, 1));
                     uv.y = Math.max(0, Math.min(uv.y, 1));
-                    this.panelClickPos = uv;
-                    if (!this.panelPosBoardX || !this.panelPosBoardY) {
-                        this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
-                        this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
+                    const snNum = this.quadPanelNode.getComponent(QuadPanelGradient).snNum;
+                    if (!this.panelPosBoard) {
+                        this.panelPosBoard = this.quadPanelNode.getChildByPath('select2/clickPos').getComponent(Label);
                     }
-                    this.panelPosBoardX.string = `x=${uv.x}`;
-                    this.panelPosBoardY.string = `y=${uv.y}`;
-                    const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
-                    touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
+                    
+                    const touchIcon = this.quadPanelNode.getChildByPath('select2/touchIcon');
+                    switch(snNum) {
+                        case 2: {
+
+                            this.panelClickPos = new Vec3(uv.x);
+                            this.panelPosBoard.string = `k=${uv.x.toFixed(2)}`;
+                            touchIcon.position = new Vec3(uv.x * panelWidth, 35, 0);
+                            break;   
+                        }
+                        case 3: {
+                            const triangleArea = (a: Vec2, b: Vec2, c: Vec2) => (0.5 * (a.x * (b.y - c.y) + b.x * (c.y - a.y) + c.x * (a.y - b.y)));
+                            const nodeA = new Vec2(0, 0);
+                            const nodeB = new Vec2(1, 0);
+                            const nodeC = new Vec2(0.5, 0.875);     // (√3)/2  ≈ 0.875
+                            const areaABC = triangleArea(nodeA, nodeB, nodeC);
+                            const areaClickBC = triangleArea(uv, nodeB, nodeC);
+                            const areaClickCA = triangleArea(uv, nodeC, nodeA);
+                            const areaClickAB = triangleArea(uv, nodeA, nodeB);
+
+                            this.panelClickPos = new Vec3(areaClickBC / areaABC, areaClickCA / areaABC, areaClickAB / areaABC);
+                            assert(this.panelClickPos.x + this.panelClickPos.y + this.panelClickPos.z === 1, "重心坐标计算错误")
+                            console.log(this.panelClickPos);
+                            if (this.panelClickPos.x < 0) {
+                                if (this.panelClickPos.y < 0) {
+                                    this.panelClickPos = new Vec3(0, 0, 1);
+                                } else if (this.panelClickPos.z < 0) {
+                                    this.panelClickPos = new Vec3(0, 1, 0);
+                                } else {
+                                    this.panelClickPos.x = 0;
+                                    const sumyz = this.panelClickPos.z + this.panelClickPos.y;
+                                    this.panelClickPos.y /= sumyz;
+                                    this.panelClickPos.z /= sumyz;
+                                }
+                            } else if (this.panelClickPos.y < 0) {
+                                if (this.panelClickPos.z < 0) {
+                                    this.panelClickPos = new Vec3(1, 0, 0);
+                                } else {
+                                    this.panelClickPos.y = 0;
+                                    const sumxz = this.panelClickPos.x + this.panelClickPos.z;
+                                    this.panelClickPos.x /= sumxz;
+                                    this.panelClickPos.z /= sumxz;
+                                }
+                            } else if (this.panelClickPos.z < 0) {
+                                this.panelClickPos.z = 0;
+                                const sumxy = this.panelClickPos.x + this.panelClickPos.y;
+                                this.panelClickPos.x /= sumxy;
+                                this.panelClickPos.y /= sumxy;
+                            }
+                            this.panelPosBoard.string = `α=${this.panelClickPos.x.toFixed(2)}, β=${this.panelClickPos.y.toFixed(2)}, γ=${this.panelClickPos.z.toFixed(2)}`;
+                            let barycentric = new Vec2();
+                            barycentric.add(nodeA.multiplyScalar(this.panelClickPos.x));
+                            barycentric.add(nodeB.multiplyScalar(this.panelClickPos.y));
+                            barycentric.add(nodeC.multiplyScalar(this.panelClickPos.z));
+                            touchIcon.position = new Vec3(barycentric.x * panelWidth, barycentric.y * panelWidth);
+                            break;   
+                        }
+                        case 4: {
+                            this.panelClickPos = new Vec3(uv.x, uv.y);
+                            this.panelPosBoard.string = `x=${uv.x.toFixed(2)}, y=${uv.y.toFixed(2)}`;
+                            touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth);
+                            break;   
+                        }
+                    }
+
+
+                   
                     break;
                 
                 case ClickState.ShowSelect:
@@ -909,20 +970,20 @@ export class MainController extends Component {
                     }
                 }
             } else if (this.clickState === ClickState.Panel) {
-                const panelWidth = this.quadPanelPos.right - this.quadPanelPos.left
-                let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
-                    (pos.y - this.quadPanelPos.bottom) / panelWidth);
-                uv.x = Math.max(0, Math.min(uv.x, 1));
-                uv.y = Math.max(0, Math.min(uv.y, 1));
-                this.panelClickPos = uv;
-                if (!this.panelPosBoardX || !this.panelPosBoardY) {
-                    this.panelPosBoardX = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosX').getComponent(Label);
-                    this.panelPosBoardY = director.getScene().getChildByPath('mainUI/InnerUI/quadPanel/clickPosY').getComponent(Label);
-                }
-                this.panelPosBoardX.string = `x=${uv.x}`;
-                this.panelPosBoardY.string = `y=${uv.y}`;
-                const touchIcon = this.quadPanelNode.getChildByName('touchIcon');
-                touchIcon.position = new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0);
+                // const panelWidth = this.quadPanelPos.right - this.quadPanelPos.left
+                // let uv: Vec2 = new Vec2((pos.x - this.quadPanelPos.left) / panelWidth, 
+                //     (pos.y - this.quadPanelPos.bottom) / panelWidth);
+                // uv.x = Math.max(0, Math.min(uv.x, 1));
+                // uv.y = Math.max(0, Math.min(uv.y, 1));
+                // this.panelClickPos = uv;
+                // if (!this.panelPosBoardX || !this.panelPosBoardY) {
+                //     this.panelPosBoardX = this.quadPanelNode.getChildByPath('select2/clickPosX').getComponent(Label);
+                //     this.panelPosBoardY = this.quadPanelNode.getChildByPath('select2/clickPosY').getComponent(Label);
+                // }
+                // this.panelPosBoardX.string = `x=${uv.x}`;
+                // this.panelPosBoardY.string = `y=${uv.y}`;
+                // const touchIcon = this.quadPanelNode.getChildByName('select2/touchIcon');
+                // touchIcon.setPosition(new Vec3(uv.x * panelWidth, uv.y * panelWidth, 0));
                 
             }
         }
@@ -1079,7 +1140,7 @@ export class MainController extends Component {
         xhr.send();
     }
 
-    /**@tip 后端接受一个64*64*64的0 1矩阵 */
+    /**后端接受一个64*64*64的0 1矩阵 */
     public uploadVoxelToServer(voxelData: Vec3[], id: string) {
 
         const xhr = new XMLHttpRequest();
@@ -1120,6 +1181,8 @@ export class MainController extends Component {
     // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
     public onSingleAddToPanelButtonClick() {
         const childList = this.quadPanelNode.children;
+        const gradientComp = this.quadPanelNode.getComponent(QuadPanelGradient);
+        gradientComp.snNum++;
         for (let i = 0; i < 4; i++) {
             if (this.curSelectVoxelId === childList[i].getComponent(PanelNode).vid)
                 return;
@@ -1138,12 +1201,8 @@ export class MainController extends Component {
             }
         }
 
-        if (i > 4) {
-            childList[4].getComponent(Label).string = "请先点击图片删除一个节点";
+        if (gradientComp.snNum >= 2) {
             childList[4].active = true;
-            this.scheduleOnce(() => {
-                childList[4].active = false;
-            }, 2000);
         }
     }
 
@@ -1699,7 +1758,7 @@ export class MainController extends Component {
             this.SelectTwoButtons.active = false;
     }
 
-    setSelectType(st: SelectingType) {
+    public setSelectType(st: SelectingType) {
         this.selectType = st;
         this.SelectSingleButtons.active = false;
         this.SelectMultiButtons.active = false;

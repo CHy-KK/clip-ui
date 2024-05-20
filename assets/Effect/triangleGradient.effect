@@ -6,21 +6,11 @@ CCEffect %{
     passes:
     - vert: legacy/main-functions/general-vs:vert # builtin header
       frag: unlit-fs:frag
+    #   cullMode: back
       properties: &props
         mainTexture:    { value: white }
         mainColor:      { value: [1, 1, 1, 1], editor: { type: color } }
-  - name: transparent
-    passes:
-    - vert: general-vs:vert # builtin header
-      frag: unlit-fs:frag
-      blendState:
-        targets:
-        - blend: true
-          blendSrc: src_alpha
-          blendDst: one_minus_src_alpha
-          blendSrcAlpha: src_alpha
-          blendDstAlpha: one_minus_src_alpha
-      properties: *props
+
 }%
 
 CCProgram unlit-fs %{
@@ -38,8 +28,6 @@ CCProgram unlit-fs %{
   };
 
   vec4 frag () {
-    vec4 col = mainColor * texture(mainTexture, v_uv);
-    CC_APPLY_FOG(col, v_position);
-    return vec4(1,1,1,1);
+    return vec4(v_uv.x, v_uv.y, 0, 1);
   }
 }%

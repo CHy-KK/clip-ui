@@ -1,5 +1,6 @@
 import { _decorator, Button, Component, director, EventHandler, Node, Sprite } from 'cc';
 import { MainController } from './Controller';
+import { QuadPanelGradient } from './QuadPanelGradient';
 const { ccclass, property } = _decorator;
 
 @ccclass('PanelNode')
@@ -44,6 +45,7 @@ export class PanelNode extends Component {
         } 
         childList[--i].active = false;
         childList[i].getComponent(PanelNode).vid = '';
+        this.node.parent.getComponent(QuadPanelGradient).snNum -= 1;
     }
 }
 

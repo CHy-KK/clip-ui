@@ -72,7 +72,7 @@ export class EditVoxel extends Component {
 
     private editState: EditState = 0;
     private voxelPosQuery: VoxelData = new VoxelData();
-    /**@tip 记录当前处于active的体素数量 */
+    /**记录当前处于active的体素数量 */
     private activeEditVoxelNum: number;
     private selectGraph: Graphics = null;
     private controller: MainController = null;
@@ -91,15 +91,15 @@ export class EditVoxel extends Component {
     private voxelRead: HTMLInputElement = null;
     private voxelDownLoadLink: HTMLAnchorElement = null;
     private opTipLabel: Label = null;
-    /**@tip 记录当前上传体素数量，用于标识体素id */
+    /**记录当前上传体素数量，用于标识体素id */
     private uploadNum: number = 0;
 
     /**
-     * @tip 记录本次选中体素信息
-     * @ele selectCubeSize: new Vec3()
-     * @ele selectMovingUIPos: new Vec3()
-     * @ele selectNodeSet: new Vec3()
-     * @ele selectZ: new Vec3()
+     * 记录本次选中体素信息
+     * @type selectCubeSize: Vec3()
+     * @type selectMovingUIPos: Vec3()
+     * @type selectNodeSet: Vec3()
+     * @type selectZ: Vec3()
      */
     private selectInfo: SelectInfo = {
         selectCubeSize: {
@@ -116,15 +116,15 @@ export class EditVoxel extends Component {
     }
 
     /**
-     * @tip 本次点击的本地方向
-     * @ele castVoxelPos: Vec3()    本次点击hitpoint的世界坐标
-     * @ele castVoxelFace: Vec3()   本次点击中体素面本地朝向
-     * @ele castFaceWorld: Vec3()   本次击中体素面世界方向
-     * @ele startVoxel: Vec3()      本次击中体素的local坐标
-     * @ele addArrayPositive: Array<Node>()     添加到击中体素正方向的体素
-     * @ele posLimit                正方向能添加的最多体素 0~61
-     * @ele addArrayNegative: Array<Node>()     添加到击中体素负方向的体素
-     * @ele negLimit                负方向能添加的最多体素 0~61
+     * 本次点击的本地方向
+     * @type castVoxelPos: Vec3()    本次点击hitpoint的世界坐标
+     * @type castVoxelFace: Vec3()   本次点击中体素面本地朝向
+     * @type castFaceWorld: Vec3()   本次击中体素面世界方向
+     * @type startVoxel: Vec3()      本次击中体素的local坐标
+     * @type addArrayPositive: Array<Node>()     添加到击中体素正方向的体素
+     * @type posLimit                正方向能添加的最多体素 0~61
+     * @type addArrayNegative: Array<Node>()     添加到击中体素负方向的体素
+     * @type negLimit                负方向能添加的最多体素 0~61
      */
     private addInfo: AddVoxelInfo = {
         castVoxelPos: new Vec3(),
