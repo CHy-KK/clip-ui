@@ -103,7 +103,7 @@ export class VoxelHistoryQueue {
         const graphicNode = new Node();
         graphicNode.name = 'blueBorder';
         const g = graphicNode.addComponent(Graphics);
-        g.strokeColor.fromHEX('#3366ff');
+        g.strokeColor.fromHEX('#33ffff');
         g.lineWidth = 2;
         g.moveTo(-43, 43);
         g.lineTo(43, 43);

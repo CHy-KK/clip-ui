@@ -240,7 +240,7 @@ export class EditVoxel extends Component {
 
     public async onDrawEditVoxelById(vid: string) {
 
-        const voxelData = this.controller.getRawVoxelData(vid);
+        const voxelData = this.controller.getRawVoxelDataById(vid);
         this.renderEditVoxel(voxelData);
     }
 

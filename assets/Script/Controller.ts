@@ -42,6 +42,12 @@ export class MainController extends Component {
     
     /******************* 场景数据 *******************/
     @property(Node)
+    public readonly ScatterNode: Node = null;
+
+    @property(Node)
+    public readonly EditEmbeddingNode: Node = null;
+
+    @property(Node)
     public readonly AxisGraphic: Node = null;
 
     @property(Node)
@@ -132,6 +138,7 @@ export class MainController extends Component {
 
     // 交互数据
     private isInitialize: boolean = false;
+    private isEditEmbedding: boolean = false;
     private clickPos: Vec2 = new Vec2(0);
     private selectMovingPos: Vec2 =  new Vec2(0);
     private isMove: boolean = false;
@@ -147,7 +154,7 @@ export class MainController extends Component {
     // private isPanel: boolean = false;
     // private isRotateSelectVoxel: boolean = false;
     private clickState: ClickState = 0;
-    private curSelectVoxelId: string = '';      // 当前innerUI显示在select区域的体素id
+    private _curSelectVoxelId: string = '';      // 当前innerUI显示在select区域的体素id
     private curEditVoxelId: string = '';        // 当亲outUI显示在编辑区域的体素id 
     private downSampleList: number[] = [];      // 降采样列表
     private isSampleChange: boolean = true;     // 是否修改了采样数据范围，决定是否要重新获取等高线图
@@ -286,7 +293,7 @@ export class MainController extends Component {
                         }   
                         
                         this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                        this.renderVoxelSelect(fileName, true);
+                        this.onVoxelSelect(fileName, true);
                         this.drawDetailInfoNode(emb);
                     // } catch (e) {
                     //     console.error('传送图片获取体素失败');
@@ -631,7 +638,7 @@ export class MainController extends Component {
         console.log('render compare voxel finished');
     }
 
-    public renderVoxelSelect(id: string, needSnapShot: boolean, snode: Node=null) {
+    public onVoxelSelect(id: string, needSnapShot: boolean, snode: Node=null) {
         this.VoxelNodeSelect.setRotationFromEuler(new Vec3(0, 0, 0));
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
@@ -671,6 +678,10 @@ export class MainController extends Component {
                 this.SelectTwoButtons.active = true;
             else 
                 this.SelectTwoButtons.active = false;
+
+            // if (this.isEditEmbedding) {
+
+            // }
         }
 
         if (needSnapShot) {
@@ -707,14 +718,6 @@ export class MainController extends Component {
 
     }
 
-    public getHistoryLength() {
-        return this.voxelDataHistory.length();
-    }
-
-    public isOutUI() {
-        return !this.isInnerUI;
-    }
-
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
@@ -744,12 +747,16 @@ export class MainController extends Component {
                     }
                     const emb = [];
                     for (let i = 0; i < 128; i++) {
-                        emb.push(0);
+                        emb.push(1);
                     }
                     this.voxelDataHistory.push(vd, id, emb, parseInt(id));
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                    this.renderVoxelSelect(id, true);
+                    this.onVoxelSelect(id, true);
                 }
+            } else if (key.keyCode === KeyCode.KEY_E) {
+                this.ScatterNode.active = !this.ScatterNode.active;
+                this.isEditEmbedding = !this.isEditEmbedding;
+                this.EditEmbeddingNode.active = !this.EditEmbeddingNode.active;
             }
         } 
 
@@ -1172,7 +1179,7 @@ export class MainController extends Component {
                     this.voxelDataHistory.push(voxelData, id, emb, -1);
                 }
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                this.renderVoxelSelect(id, true);
+                this.onVoxelSelect(id, true);
                 this.drawDetailInfoNode(emb);
             }  
         };
@@ -1190,7 +1197,7 @@ export class MainController extends Component {
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
         this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
-        this.renderVoxelSelect(id, needSnapShot);
+        this.onVoxelSelect(id, needSnapShot);
     }
 
     // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
@@ -1221,13 +1228,6 @@ export class MainController extends Component {
         }
     }
 
-    public isExistHistoryList(id: string) {
-        return this.voxelDataHistory.isExist(id);
-    }
-
-    public getRawVoxelData(id: string) {
-        return this.voxelDataHistory.getVoxelById(id);
-    }
 
     public async onInterpolationButtonClick() {
         // this.panelClickPos.xy
@@ -1253,7 +1253,7 @@ export class MainController extends Component {
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
         this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
-        this.renderVoxelSelect(id, needSnapShot);
+        this.onVoxelSelect(id, needSnapShot);
     }
 
     // TODO: 要能点击snapshotnode也能看比较
@@ -1486,7 +1486,7 @@ export class MainController extends Component {
         this.isSampleChange = true;
     }
 
-    private drawDetailInfoNode(emb: number[]) {
+    public drawDetailInfoNode(emb: number[]) {
         this.detailInfoNode.destroyAllChildren();
         const diGraph = this.detailInfoNode.getComponent(Graphics);
         diGraph.clear();
@@ -1758,7 +1758,7 @@ export class MainController extends Component {
                 }   
                 
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                this.renderVoxelSelect(fileName, true);
+                this.onVoxelSelect(fileName, true);
                 this.drawDetailInfoNode(emb);
             }  
         };  
@@ -1795,5 +1795,36 @@ export class MainController extends Component {
         }
     }
 
+    /* 外部访问主控模块属性函数 */
+    public getVoxelEmbeddingById(id: string) {
+        return this.voxelDataHistory.getEmbById(id);
+    }
 
+    public isExistHistoryList(id: string) {
+        return this.voxelDataHistory.isExist(id);
+    }
+
+    public getRawVoxelDataById(id: string) {
+        return this.voxelDataHistory.getVoxelById(id);
+    }
+
+    public getVoxelSnapShotById(id: string) {
+        return this.voxelDataHistory.getSnapShotById(id);
+    }
+
+    public getHistoryLength() {
+        return this.voxelDataHistory.length();
+    }
+
+    public isOutUI() {
+        return !this.isInnerUI;
+    }
+
+    public get curSelectVoxelId() {
+        return this._curSelectVoxelId;
+    }
+
+    private set curSelectVoxelId(val: string) {
+        this._curSelectVoxelId = val;
+    }
 }

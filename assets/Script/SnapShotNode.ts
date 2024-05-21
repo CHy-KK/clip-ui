@@ -38,7 +38,7 @@ export class SnapShotNode extends Component {
                 this.editVoxelController.onDrawEditVoxelById(this.vid);
             }
         } else {
-            this.controller.renderVoxelSelect(this.vid, false, this.node);
+            this.controller.onVoxelSelect(this.vid, false, this.node);
             this.controller.onDetailInfoSelectClick(new Event(''), 'node');
             // this.controller.showSnapSelect(this.node);
         }
