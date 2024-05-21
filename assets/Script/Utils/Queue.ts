@@ -62,8 +62,10 @@ export class VoxelHistoryQueue {
         const spriteNodeI = new Node();
         const ssnO = spriteNodeO.addComponent(SnapShotNode);
         const ssnI = spriteNodeI.addComponent(SnapShotNode);
+        spriteNodeO.name = id;
         ssnO.vid = id;
         ssnO.inout = InOrOut.Out;
+        spriteNodeI.name = id;
         ssnI.vid = id;
         ssnI.inout = InOrOut.In;
         spriteNodeO.layer = this.outHistoryListNode.layer;
@@ -96,6 +98,22 @@ export class VoxelHistoryQueue {
         idLabelI.setPosition(new Vec3(0, 50, 0));
         idLabelO.setScale(new Vec3(1, -1, 1));
         idLabelI.setScale(new Vec3(1, -1, 1));
+
+        
+        const graphicNode = new Node();
+        graphicNode.name = 'blueBorder';
+        const g = graphicNode.addComponent(Graphics);
+        g.strokeColor.fromHEX('#3366ff');
+        g.lineWidth = 2;
+        g.moveTo(-43, 43);
+        g.lineTo(43, 43);
+        g.lineTo(43, -43);
+        g.lineTo(-43, -43);
+        g.lineTo(-43, 43);
+        g.stroke();
+        graphicNode.layer = spriteNodeI.layer;
+        graphicNode.active = false;
+        spriteNodeI.addChild(graphicNode);
 
         
         this.outHistoryListNode.addChild(spriteNodeO);
@@ -180,16 +198,18 @@ export class VoxelHistoryQueue {
         return this.rawVoxelDataHistory.length;
     }
 
+    /**单次点击显示蓝色框，黄色多选框必须手动取消，且最大选中两个*/  
     public showSnapSelect(snode: Node) {
+        snode.getChildByName('blueBorder').active = true;
         
         if (this.selectSnapNode.length === 2 && snode === this.selectSnapNode[1]) {
-            const gnode = snode.children[snode.children.length - 1];
+            const gnode = snode.getChildByName('yellowBorder');
             snode.removeChild(gnode);
             gnode.destroy();
             this.selectSnapNode.pop();
             return;
         } else if (this.selectSnapNode.length !== 0 && snode === this.selectSnapNode[0]) {
-            const gnode = snode.children[snode.children.length - 1];
+            const gnode = snode.getChildByName('yellowBorder');
             snode.removeChild(gnode);
             gnode.destroy();
             if (this.selectSnapNode.length === 2)
@@ -202,6 +222,7 @@ export class VoxelHistoryQueue {
             return;
         this.selectSnapNode.push(snode);
         const graphicNode = new Node();
+        graphicNode.name = 'yellowBorder';
         const g = graphicNode.addComponent(Graphics);
         g.strokeColor.fromHEX('#ffff33');
         g.lineWidth = 2;
@@ -213,6 +234,12 @@ export class VoxelHistoryQueue {
         g.stroke();
         snode.addChild(graphicNode);
         graphicNode.layer = snode.layer;
+    }
+
+    public cancelSelect(id: string) {
+        if (this.isExist(id) === -1)
+            return;
+        this.innerHistoryListNode.getChildByPath(id + '/blueBorder').active = false;
     }
 
     public clearSnapSelect() {

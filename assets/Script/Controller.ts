@@ -631,7 +631,7 @@ export class MainController extends Component {
         console.log('render compare voxel finished');
     }
 
-    public renderVoxelSelect(id: string, needSnapShot: boolean) {
+    public renderVoxelSelect(id: string, needSnapShot: boolean, snode: Node=null) {
         this.VoxelNodeSelect.setRotationFromEuler(new Vec3(0, 0, 0));
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
@@ -657,7 +657,22 @@ export class MainController extends Component {
             childList[i++].active = false;
         }
 
+        if (this.voxelDataHistory.isExist(this.curSelectVoxelId)) {
+            this.voxelDataHistory.cancelSelect(this.curSelectVoxelId);
+        }
+
         this.curSelectVoxelId = id;
+
+        // 如果是选中历史队列中的snapshot节点需要显示选中框
+        if (snode !== null) {
+            console.log('show snode');
+            this.voxelDataHistory.showSnapSelect(snode);
+            if (this.voxelDataHistory.selectSnapNode.length === 2) 
+                this.SelectTwoButtons.active = true;
+            else 
+                this.SelectTwoButtons.active = false;
+        }
+
         if (needSnapShot) {
             this.isSnapShotReady = SnapShotState.wait1frame;
             this.snapShotId = id;
@@ -1750,13 +1765,13 @@ export class MainController extends Component {
         xhr.send(formData);  
     }
     
-    public showSnapSelect(snode: Node) {
-        this.voxelDataHistory.showSnapSelect(snode);
-        if (this.voxelDataHistory.selectSnapNode.length === 2) 
-            this.SelectTwoButtons.active = true;
-        else 
-            this.SelectTwoButtons.active = false;
-    }
+    // public showSnapSelect(snode: Node) {
+    //     this.voxelDataHistory.showSnapSelect(snode);
+    //     if (this.voxelDataHistory.selectSnapNode.length === 2) 
+    //         this.SelectTwoButtons.active = true;
+    //     else 
+    //         this.SelectTwoButtons.active = false;
+    // }
 
     public setSelectType(st: SelectingType) {
         this.selectType = st;

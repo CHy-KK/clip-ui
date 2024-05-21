@@ -7523,7 +7523,7 @@
     "_lpos": {
       "__type__": "cc.Vec3",
       "x": 30,
-      "y": -45,
+      "y": -40,
       "z": 0
     },
     "_lrot": {
@@ -7668,7 +7668,7 @@
     "_contentSize": {
       "__type__": "cc.Size",
       "width": 100,
-      "height": 510
+      "height": 520
     },
     "_anchorPoint": {
       "__type__": "cc.Vec2",
@@ -15001,7 +15001,7 @@
     },
     "_inputFlag": 5,
     "_inputMode": 6,
-    "_maxLength": 8,
+    "_maxLength": 100,
     "_id": "fb+e76SvlC96Spl96ScZsu"
   },
   {

@@ -26,12 +26,7 @@ export class PanelNode extends Component {
     private onClick() {
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        // const tex2d = this.node.getComponent(Sprite).spriteFrame.texture;
-        // tex2d.destroy();
-        // this.node.getComponent(Sprite).spriteFrame = undefined;
-        // if (!this.controller.isExistHistoryList(this.vid)) 
-        //     sf.destroy();
-        // this.node.getComponent(Sprite).spriteFrame.destroy();
+   
         const childList = this.node.parent.children;
         let i = this.pid + 1;
         if (this.pid < 3 && childList[this.pid + 1].active) {
