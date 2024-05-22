@@ -26,6 +26,7 @@ export class VoxelHistoryQueue {
         this.maxLength = maxlength;
     }
 
+    /**如果存在返回在数组中下标，不存在返回-1 */
     public isExist(id: string): number {
         for (let i = 0; i < this.voxelIdxHistory.length; i++) {
             if (this.voxelIdxHistory.getElement(i).vid === id) 

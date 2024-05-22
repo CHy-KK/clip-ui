@@ -1800,6 +1800,7 @@ export class MainController extends Component {
         return this.voxelDataHistory.getEmbById(id);
     }
 
+    /**如果存在返回在数组中下标，不存在返回-1 */
     public isExistHistoryList(id: string) {
         return this.voxelDataHistory.isExist(id);
     }

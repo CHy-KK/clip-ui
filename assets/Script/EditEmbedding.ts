@@ -1,4 +1,4 @@
-import { _decorator, assert, Component, director, Label, Node, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec3 } from 'cc';
+import { _decorator, assert, Component, director, error, Label, Node, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec3 } from 'cc';
 import { MainController } from './Controller';
 const { ccclass, property } = _decorator;
 
@@ -20,6 +20,8 @@ export class EditEmbedding extends Component {
      * @type string
      */
     operations = []; 
+    /**对应每一步operation在ui上的长度，在backspace时用来调整position */
+    operationsLength = [];
     controller: MainController = null;
     opStack: string[] = [];
     /**
@@ -30,10 +32,12 @@ export class EditEmbedding extends Component {
     /**记录当前公式长度 */
     formulaEndPos: Vec3 = new Vec3();
     showFormulaNode: Node = null;
+    constantInputNode: Node = null;
 
     start() {
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         this.showFormulaNode = this.node.getChildByName('showFormula');
+        this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
     }
 
     private calculateOps(op: string) {
@@ -47,32 +51,35 @@ export class EditEmbedding extends Component {
         switch(op) {
             case '+':
                 try {
-                    if (type1 === 'number') 
+                    if (type1 === 'number' && type2 === 'number') 
                         res = emb1 + emb2;
-                    else {
+                    else if (emb1.length === 128 && emb2.length === 128) {
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb1[i] += emb2[i];
-                        console.log(emb1);
+                            res[i] = emb1[i] + emb2[i];
+                        console.log(res);
+                    } else {
+                        throw new Error('+ operation type wrong!');
                     }
-                    res = emb1;
-                } catch {
-                    console.error('+ operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
-                
                 break;
 
             case '-':
                 try {
-                    if (type1 === 'number') 
+                    if (type1 === 'number' && type2 === 'number') 
                         res = emb2 - emb1;
-                    else {
+                    else if (emb1.length === 128 && emb2.length === 128) {
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb2[i] -= emb1[i];
+                            res[i] = emb2[i] - emb1[i];
+                    } else {
+                        throw new Error('- operation type wrong!');
                     }
-                    res = emb2;
-                } catch {
-                    console.error('- operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
                 break;
@@ -82,66 +89,71 @@ export class EditEmbedding extends Component {
                     if (type1 === 'number') {
                         if (type2 === 'number') {
                             res = emb1 * emb2;
-                        } else {
+                        } else if (emb2.length === 128) {
+                            res = new Array(128);
                             for (let i = 0; i < 128; i++) 
-                                emb2[i] *= emb1;
-                            res = emb2;
+                                res[i] = emb2[i] * emb1;
                         }
-                    } else if (type2 === 'number') {
+                    } else if (type2 === 'number' && emb1.length === 128) {
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb1[i] *= emb2;
-                        res = emb1;
+                            res[i] = emb1[i] * emb2;
                     } else {
-                        console.error('* operation type wrong!');
-                        return null;
+                        throw new Error('* operation type wrong!');
                     }
-                } catch {
-                    console.error('* operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
                 break;
 
             case '/':   // 被除数emb1一定要是常数
                 try {
-                    if (type2 === 'number')
+                    if (type1 === 'number' && type2 === 'number')
                         res = emb2 / emb1;
-                    else {
+                    else if (type1 === 'number' && emb2.length === 128){
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb2[i] /= emb1;
-                        res = emb2;
+                            res[i] = emb2[i] / emb1;
+                    } else {
+                        throw new Error('/ operation type wrong!');
                     }
-                } catch {
-                    console.error('/ operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
                 break;
 
             case 'max':
                 try {
-                    if (type1 === 'number') 
+                    if (type1 === 'number' && type2 === 'number') 
                         res = Math.max(emb1, emb2);
-                    else {
+                    else if (emb1.length === 128 && emb2.length === 128) {
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb1[i] = Math.max(emb1[i], emb2[i]);
-                        res = emb1;
+                            res[i] = Math.max(emb1[i], emb2[i]);
+                    } else {
+                        throw new Error('max operation type wrong!');
                     }
-                } catch {
-                    console.error('max operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
                 break;
 
             case 'min':
                 try {
-                    if (type1 === 'number') 
+                    if (type1 === 'number' && type2 === 'number') 
                         res = Math.min(emb1, emb2);
-                    else {
+                    else if (emb1.length === 128 && emb2.length === 128) {
+                        res = new Array(128);
                         for (let i = 0; i < 128; i++) 
-                            emb1[i] = Math.min(emb1[i], emb2[i]);
-                        res = emb1;
+                            res[i] = Math.min(emb1[i], emb2[i]);
+                    } else {
+                        throw new Error('min operation type wrong!');
                     }
-                } catch {
-                    console.error('min operation type wrong!');
+                } catch(e) {
+                    console.error(e);
                     return null;
                 }
                 break;
@@ -211,12 +223,12 @@ export class EditEmbedding extends Component {
 
         const res = this.embStack[0];
         console.log(res);
-        if (this.opStack.length > 0 || this.embStack.length > 1 || res.length !== 128) {
+        if (this.opStack.length > 0 || this.embStack.length === 0 || this.embStack.length > 1 || res.length !== 128) {
             
             console.error('计算式错误!');
             console.error(this.opStack);
             console.error(this.embStack);
-            return;
+            return null;
         }
         return res;
     }
@@ -224,7 +236,7 @@ export class EditEmbedding extends Component {
     public clearEdit()  {
         this.opStack = [];
         this.embStack = [];
-        this.operations = ['('];
+        this.operations = [];
         this.node.getChildByName('showFormula').destroyAllChildren();
         this.formulaEndPos = new Vec3();
     }
@@ -232,15 +244,20 @@ export class EditEmbedding extends Component {
     public calculateEdit() {
         this.operations.unshift('(');
         this.operations.push(')');
+        console.log("calculating operations:");
         console.log(this.operations);
         const res = this.analyseEditOp();
         this.operations.shift();
         this.operations.pop();
-        this.controller.drawDetailInfoNode(res);
+        if (res)
+            this.controller.drawDetailInfoNode(res);
     }
 
     public addSnapShotToEdit() {
         const curId = this.controller.curSelectVoxelId;
+        if (this.controller.isExistHistoryList(curId) === -1) {
+            return;
+        }
         const curEmb: number[] = this.controller.getVoxelEmbeddingById(curId);
         const curSp: SpriteFrame = this.controller.getVoxelSnapShotById(curId);
         this.operations.push(curEmb);
@@ -253,8 +270,33 @@ export class EditEmbedding extends Component {
         spNode.layer = this.node.layer;
         this.showFormulaNode.addChild(spNode);
         spNode.setPosition(this.formulaEndPos);
+        this.operationsLength.push(55);
         this.formulaEndPos.add(new Vec3(55, 0, 0));
         this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+    }
+
+    public addConstantToEdit() {
+        const inputConstant = this.constantInputNode.getComponent(Label).string;
+        const num = parseFloat(inputConstant);
+        console.log(num);
+        if (!isNaN(num)) {
+            
+            const numNode = new Node();
+            const numLabel = numNode.addComponent(Label);
+            numLabel.string = inputConstant;
+            numLabel.color.fromHEX('#000000');
+            numLabel.fontSize = 15;
+            numLabel.lineHeight = 15;
+            numNode.getComponent(UITransform).anchorPoint.set(0, 0.5);
+            numNode.layer = this.node.layer;
+            this.showFormulaNode.addChild(numNode);
+            numNode.setPosition(this.formulaEndPos);
+
+            this.operations.push(num);
+            this.operationsLength.push(10 * inputConstant.length);
+            this.formulaEndPos.add(new Vec3(10 * inputConstant.length, 0, 0));
+            this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        }
     }
 
     public onOperationButtonClick(e: Event, op: string) {
@@ -272,16 +314,30 @@ export class EditEmbedding extends Component {
 
         if (op === 'max' || op === 'min') {
             this.operations.push(op);
+            this.operationsLength.push(30);
             this.formulaEndPos.add(new Vec3(30, 0, 0));
         } else if (op === ',') {
+            this.operationsLength.push(15);
             this.formulaEndPos.add(new Vec3(15, 0, 0));
         } else {
             this.operations.push(op);
+            this.operationsLength.push(15);
             this.formulaEndPos.add(new Vec3(15, 0, 0));
         }
         this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
         console.log(this.operations);
     }
+
+    public onBackSpaceButtonClick() {
+        this.operations.pop();
+        this.showFormulaNode.children.pop();
+        const offset = this.operationsLength.pop();
+        this.formulaEndPos.subtract(new Vec3(offset, 0, 0));
+        this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+
+    }
+
+
 }
 
 
