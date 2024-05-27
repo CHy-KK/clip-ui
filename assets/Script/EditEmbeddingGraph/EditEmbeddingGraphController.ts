@@ -1,5 +1,8 @@
-import { _decorator, assert, Component, director, error, Label, Node, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec3 } from 'cc';
-import { MainController } from './Controller';
+import { _decorator, assert, Color, Component, director, error, EventMouse, EventTouch, Graphics, Input, input, Label, Node, Prefab, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from 'cc';
+import { MainController } from '../Controller';
+import { EditEmbeddingNodeOperation } from './EditEmbeddingNodeOperation';
+import { EditEmbeddingNodeVoxel } from './EditEmbeddingNodeVoxel';
+import { EditEmbeddingNodeBase, OutString } from './EditEmbeddingNodeBase';
 const { ccclass, property } = _decorator;
 
 const opPriority = new Map();
@@ -11,33 +14,79 @@ opPriority.set('/', 1);
 opPriority.set('max', 2);
 opPriority.set('min', 2);
 
-@ccclass('EditEmbedding')
-export class EditEmbedding extends Component {
+@ccclass('EditEmbeddingGraphController')
+export class EditEmbeddingGraphController extends Component {
+
+    
+    @property(Prefab)
+    public readonly EditGraphNodePrefab: Prefab = null;
 
     /**记录编辑操作 */
     /**
      * @type number
      * @type string
      */
-    operations = []; 
+    private operations = []; 
     /**对应每一步operation在ui上的长度，在backspace时用来调整position */
-    operationsLength = [];
-    controller: MainController = null;
-    opStack: string[] = [];
+    private operationsLength = [];
+    private controller: MainController = null;
+    private opStack: string[] = [];
     /**
      * @type number
      * @type string
      */
-    embStack = [];
+    private embStack: any[] = [];
     /**记录当前公式长度 */
-    formulaEndPos: Vec3 = new Vec3();
-    showFormulaNode: Node = null;
-    constantInputNode: Node = null;
+    private formulaEndPos: Vec3 = new Vec3();
+    private showFormulaNode: Node = null;
+    private constantInputNode: Node = null;
+
+    /**记录当前是否处于链接两个embedding node */
+    private _isConnecting: boolean = false;
+    /**记录链接起始点 */
+    private connectFrom: Node = null;
+
+    private isDragNode: boolean = false;
+    private dragOffset: Vec2 = new Vec2();
+    private draggingNode: Node = null;
+
+    protected onEnable(): void {
+        input.on(Input.EventType.MOUSE_DOWN, this.onMouseDown, this);
+        input.on(Input.EventType.MOUSE_MOVE, this.onMouseMove, this);
+        input.on(Input.EventType.MOUSE_UP, this.onMouseUp, this);
+    }
+
+    protected onDisable(): void {
+        input.off(Input.EventType.MOUSE_DOWN, this.onMouseDown, this);
+        input.off(Input.EventType.MOUSE_MOVE, this.onMouseMove, this);
+        input.on(Input.EventType.MOUSE_UP, this.onMouseUp, this);
+    }
+
+    public get isConnecting() {
+        return this._isConnecting;
+    }
+
+    private set isConnecting(val: boolean) {
+        if (this.isConnecting === true) {
+            console.error('此时已经处于链接状态');
+            return;
+        }
+        this._isConnecting = val;
+    }
+    
 
     start() {
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        this.showFormulaNode = this.node.getChildByName('showFormula');
+        this.showFormulaNode = this.node.getChildByPath('showFormula/EditNode');
         this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
+        const editGraphMask = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
+        editGraphMask.fillColor.fromHEX('#444444');
+        editGraphMask.moveTo(-275, 150);
+        editGraphMask.lineTo(275, 150);
+        editGraphMask.lineTo(275, -150);
+        editGraphMask.lineTo(-275, -150);
+        editGraphMask.lineTo(-275, 150);
+        editGraphMask.fill();
     }
 
     private calculateOps(op: string) {
@@ -262,17 +311,16 @@ export class EditEmbedding extends Component {
         const curSp: SpriteFrame = this.controller.getVoxelSnapShotById(curId);
         this.operations.push(curEmb);
 
-        const spNode = new Node();
-        const sp = spNode.addComponent(Sprite);
-        sp.spriteFrame = curSp;
-        spNode.getComponent(UITransform).contentSize.set(50, 50);
-        spNode.getComponent(UITransform).anchorPoint.set(0, 0.5);
-        spNode.layer = this.node.layer;
-        this.showFormulaNode.addChild(spNode);
-        spNode.setPosition(this.formulaEndPos);
-        this.operationsLength.push(55);
-        this.formulaEndPos.add(new Vec3(55, 0, 0));
-        this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        const voxelNode = new Node();
+        voxelNode.layer = this.node.layer;
+        const eenv = voxelNode.addComponent(EditEmbeddingNodeVoxel);
+        eenv.voxelSnapShot = curSp;
+
+        this.showFormulaNode.addChild(voxelNode);
+        
+        // this.operationsLength.push(55);
+        // this.formulaEndPos.add(new Vec3(55, 0, 0));
+        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
     public addConstantToEdit() {
@@ -292,10 +340,10 @@ export class EditEmbedding extends Component {
             this.showFormulaNode.addChild(numNode);
             numNode.setPosition(this.formulaEndPos);
 
-            this.operations.push(num);
-            this.operationsLength.push(10 * inputConstant.length);
-            this.formulaEndPos.add(new Vec3(10 * inputConstant.length, 0, 0));
-            this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+            // this.operations.push(num);
+            // this.operationsLength.push(10 * inputConstant.length);
+            // this.formulaEndPos.add(new Vec3(10 * inputConstant.length, 0, 0));
+            // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
         }
     }
 
@@ -312,6 +360,10 @@ export class EditEmbedding extends Component {
         this.showFormulaNode.addChild(opNode);
         opNode.setPosition(this.formulaEndPos);
 
+        const EENO = new Node();
+        EENO.addComponent(EditEmbeddingNodeOperation);
+        this.node.addChild(EENO);
+
         if (op === 'max' || op === 'min') {
             this.operations.push(op);
             this.operationsLength.push(30);
@@ -324,19 +376,94 @@ export class EditEmbedding extends Component {
             this.operationsLength.push(15);
             this.formulaEndPos.add(new Vec3(15, 0, 0));
         }
-        this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
-        console.log(this.operations);
+        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        // console.log(this.operations);
     }
 
     public onBackSpaceButtonClick() {
-        this.operations.pop();
-        this.showFormulaNode.children.pop();
-        const offset = this.operationsLength.pop();
-        this.formulaEndPos.subtract(new Vec3(offset, 0, 0));
-        this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
-
+        // this.operations.pop();
+        // this.showFormulaNode.children.pop();
+        // const offset = this.operationsLength.pop();
+        // this.formulaEndPos.subtract(new Vec3(offset, 0, 0));
+        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
+    public connectEditEmbedding (from: Node) {
+        this.isConnecting = true;
+        this.connectFrom = from;
+    }
+
+    private onMouseDown(e: EventMouse) {
+        console.log('click number' + e.getButton());
+        if (e.getButton() === EventMouse.BUTTON_RIGHT) {
+            // const sp = this.node.getChildByName('LeftRightClickVisualize').getComponent(Sprite);
+            // sp.color = new Color(0, 255, 0);
+            console.log('right');
+            this.isConnecting = false;
+            this.connectFrom = null;
+        } else if (e.getButton() === EventMouse.BUTTON_LEFT) {
+            // const sp = this.node.getChildByName('LeftRightClickVisualize').getComponent(Sprite)
+            // sp.color = new Color(0, 0, 255);
+            const childList = this.showFormulaNode.children;
+            this.draggingNode = null;
+            for (let i = childList.length - 1; i >= 0; i--) {
+                // getcomponent会查询派生
+                const een = childList[i].getComponent(EditEmbeddingNodeBase);
+                let clickType: OutString = { str: '' };
+                if (een?.clickQuery(e.getUILocation(), clickType)) {
+                    console.log(clickType);
+                    if (clickType.str === 'output') {
+                        this.isConnecting = true;   
+                    } else if (clickType.str === 'move') {
+                        this.isDragNode = true;
+                        Vec2.subtract(this.dragOffset, new Vec2(childList[i].worldPosition.x, childList[i].worldPosition.y), e.getUILocation());
+                        this.draggingNode = childList[i];
+                        this.showFormulaNode.removeChild(this.draggingNode);
+                        this.showFormulaNode.addChild(this.draggingNode);
+                    }
+                    break;
+                }
+            }
+        }
+    }
+
+    private onMouseMove(e: EventMouse) {
+        if (this.isConnecting) {
+            const g = this.connectFrom.getComponent(Graphics);
+            g.clear();
+            g.strokeColor.fromHEX('#333333');
+            g.lineWidth = 2;
+            g.moveTo(0, 0);
+            g.lineTo(10, 10);
+            g.stroke();
+        } else if (this.isDragNode) {
+            const newPos = Vec2.add(new Vec2(), e.getUILocation(), this.dragOffset);
+            this.draggingNode.setWorldPosition(newPos.x, newPos.y, 0);
+        }
+    }
+
+    private onMouseUp(e: EventMouse) {
+        if (e.getButton() === EventMouse.BUTTON_LEFT) {
+            // const sp = this.node.getChildByName('LeftRightClickVisualize').getComponent(Sprite)
+            // sp.color = new Color(0, 0, 255);
+            const childList = this.showFormulaNode.children;
+            for (let i = childList.length - 1; i >= 0; i--) {
+                // getcomponent会查询派生
+                const een = childList[i].getComponent(EditEmbeddingNodeBase);
+                let clickType: OutString = { str: '' };
+                if (een.clickQuery(e.getUILocation(), clickType)) {
+                    // 如果鼠标起来的时候在input button上，且已经点击过一个节点的output节点，那么
+                    if (clickType.str === 'input' && this.isConnecting) {
+
+                    }
+                    break;
+                }
+            }
+        }
+        this.isDragNode = false;
+        this.isConnecting = false;
+        this.draggingNode = null;
+    }
 
 }
 

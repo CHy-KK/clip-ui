@@ -134,7 +134,6 @@ export class MainController extends Component {
     private voxelDownLoadLinkHTML: HTMLAnchorElement = null;
     private imageReadHTML: HTMLInputElement = null;
     private contourData = [];
-    private blankNum = 0;   // 白板体素编号
 
     // 交互数据
     private isInitialize: boolean = false;
@@ -164,7 +163,10 @@ export class MainController extends Component {
     private compareVoxelSet: Map<number, number> = new Map();
     private isRenderCompare: boolean = false;
     private selectSnapNode: Node[] = [];
-    // private drawEditLock: LockAsync = new LockAsync();
+    /**标识白板体素序号 */
+    private blankNum = 0;   
+    /**标识创建体素序号 */
+    private createNum = 0;
 
     // TODO：把上传体素接口完成
 
@@ -1162,6 +1164,50 @@ export class MainController extends Component {
         xhr.send();
     }
 
+    /**向后端发送一个embedding列表，获取体素列表 */
+    private getMultiVoxelFromServer(embList: [], isAddToHistory: boolean=false) {
+        let xhr = new XMLHttpRequest();
+
+        let url = SERVER_HOST + RequestName.GetMultiVoxel;
+        
+        const formData = new FormData();  
+        formData.append('embList', embList.toString());
+        
+        xhr.open('GET', url, true);
+        xhr.onreadystatechange = () => { 
+            if (xhr.readyState === 4 && xhr.status === 200) { 
+                const responseVoxel = JSON.parse(xhr.responseText);
+                const rawVoxelData = responseVoxel[0];
+                const emb = responseVoxel[1][0];
+                for (let i = 0; i < emb.length; i++) {
+                    emb[i] = parseFloat(emb[i]);
+                }
+                let voxelData: Vec3[] = [];
+
+                for (let x = 0; x < 64; x++) {
+                    for (let y = 0; y < 64; y++) {
+                        for (let z = 0; z < 64; z++) {
+                            if (rawVoxelData[z][y][x]) {
+                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                            }
+                        }
+                    }
+                }
+  
+                if (isAddToHistory && !this.voxelDataHistory.push(voxelData, `create-${this.createNum}`, emb, -1)) {   // 如果队列满了则pop掉队首
+                    this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push(voxelData, `create-${this.createNum}`, emb, -1);
+                }   
+                
+                this.isGetVoxelFinished = true;
+                this.node.emit(GET_VOXEL_FINISH_EVENT);
+                // this.drawDetailInfoNode(emb);
+            }  
+        };  
+
+        xhr.send(formData);
+    }
+
     /**后端接受一个64*64*64的0 1矩阵 */
     public uploadVoxelToServer(voxelData: Vec3[], id: string) {
 
@@ -1199,6 +1245,8 @@ export class MainController extends Component {
         this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
         this.onVoxelSelect(id, needSnapShot);
     }
+
+
 
     // TODO: panel上的button点击之后如果sprite无引用要destroy掉，但是暂时没有找到安全的destroy的方法
     public onSingleAddToPanelButtonClick() {

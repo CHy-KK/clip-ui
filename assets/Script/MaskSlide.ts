@@ -85,7 +85,7 @@ export class MaskSlide extends Component {
         }
     }
 
-    translateCamera(offset: Vec2) {
+    private translateCamera(offset: Vec2) {
         const thisPos = new Vec2(this.node.position.x, this.node.position.y);
         const curPos = Vec2.add(new Vec2(), thisPos, Vec2.multiplyScalar(new Vec2(), offset, this.moveSpeed));
         const childList = this.node.children;
@@ -117,7 +117,7 @@ export class MaskSlide extends Component {
         
     }
 
-    onTouchEnd(e: EventTouch) {
+    private onTouchEnd(e: EventTouch) {
         if (this.isClickIn) {
             if (this.isMove) {
                 const curTime = (new Date()).getMilliseconds();
@@ -132,7 +132,7 @@ export class MaskSlide extends Component {
         this.isClickIn = false;
     }
 
-    onTouchMove(e: EventTouch) {
+    private onTouchMove(e: EventTouch) {
         if (this.isClickIn) {
             const offset = Vec2.multiplyScalar(new Vec2, this.moveDir, Vec2.dot(e.getDelta(), this.moveDir));
             this.translateCamera(Vec2.multiplyScalar(new Vec2(), offset, 0.1));
@@ -155,7 +155,7 @@ export class MaskSlide extends Component {
     }
     
 
-    onTouchStart(e: EventTouch) {
+    private onTouchStart(e: EventTouch) {
         if (!this.controller)
             this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         const pos: Vec2 = e.touch.getUILocation();

@@ -35,6 +35,7 @@ export type cubeSize = {
 export enum RequestName {
     InitializeOverview = '/initialize_overview',
     GetVoxel = '/get_voxel',
+    GetMultiVoxel = '/get_multi_voxel',
     SendImage = '/get_embeddings_by_image',
     GetContour = '/get_contour_img',
     SendPrompt = '/get_embeddings_by_text_query',
@@ -76,6 +77,17 @@ export enum EditState {
     DirectionalSubstract = 9
 }
 
+export enum EditEmbeddingNodeType {
+    Add = 0,
+    Subtract = 1,
+    Multiply = 2,
+    Divide = 3,
+    Max = 4,
+    Min = 5,
+    Embedding = 6,
+    Number = 7
+}
+
 export const type2Color = [
     'FF0000',
     '00FF00',
@@ -114,4 +126,3 @@ export function angle2radian(angle: number): number {
 export function isPosInQuad(pos: Vec2, quad: RectSize) {
     return pos.x >= quad.left && pos.x <= quad.right && pos.y >= quad.bottom && pos.y <= quad.top;
 }
-

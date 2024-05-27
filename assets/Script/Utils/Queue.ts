@@ -131,6 +131,10 @@ export class VoxelHistoryQueue {
         this.innerHistoryListNode.setPosition(new Vec3(0, 215, 0));
     }
 
+    /**
+     * @param idx: 标识获取体素在服务器data中的下标，如果是自定义体素则-1
+     * @param sss: 当前是否获取snapshot
+     */
     public push(voxel: Vec3[], id: string, emb: number[], idx: number, sss: boolean = false): boolean {
         if (this.isExist(id) != -1)
             return true;
