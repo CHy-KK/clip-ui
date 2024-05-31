@@ -78,14 +78,17 @@ export enum EditState {
 }
 
 export enum EditEmbeddingNodeType {
-    Add = 0,
-    Subtract = 1,
-    Multiply = 2,
-    Divide = 3,
-    Max = 4,
-    Min = 5,
-    Embedding = 6,
-    Number = 7
+    Add = 'Add',
+    Subtract = 'Subtract',
+    Multiply = 'Multiply',
+    Divide = 'Divide',
+    Max = 'Max',
+    Min = 'Min',
+    /**Voxel embedding */ 
+    Voxel = 'Voxel',  
+    Number = 'Constant',
+    /**当前节点输入类型不满足时 */
+    None = 'None'
 }
 
 export const type2Color = [

@@ -11,24 +11,32 @@ export class EditEmbeddingNodeBase extends Component {
     /**用于绘制节点背景框 */
     protected backgroundGraphic: Graphics = null;
 
+    /**本节点的input button节点 */
+    public inputNode1: Node = null;
+    /**本节点的input button节点 */
+    public inputNode2: Node = null;
+    /**记录连接本节点的前继输入节点的output button节点 */
+    public inputFrom1: Node = null;
+    /**记录连接本节点的前继输入节点的output button节点 */
+    public inputFrom2: Node = null;
+    /**本节点输出的button节点 */
+    public outputNode: Node = null;
+    /**记录本节点连接的输出目标节点的button节点 */
+    public outputTo: Node = null;
     /**用于绘制节点到另一个节点连线，启点为0,0即可 */
-    protected connectLineGraphic: Graphics = null;
-
-    protected inputNode1: Node = null;
-    protected inputNode2: Node = null;
+    public connectLineGraphic: Graphics = null;
 
     protected EEGController: EditEmbeddingGraphController = null;
     protected _nodeType: EditEmbeddingNodeType = null;
+    protected _outputType: EditEmbeddingNodeType = null;
 
     /**记录该节点包围盒 */
     public nodeBoundingBox: RectSize = null;
 
-    public outputNodePos: Vec2 = null;
-    public inputNodePos1: Vec2 = null;
-    public inputNodePos2: Vec2 = null;
-    
-    /**输出值节点 */
-    protected outPutNode: Node = null;
+    /**记录该节点的数据number/voxel embedding */
+    protected _value: any = null;
+
+    protected isInputChange: boolean = false;
 
     protected onLoad(): void {
         this.EEGController = director.getScene().getChildByPath('mainUI/InnerUI/EditEmbedding').getComponent(EditEmbeddingGraphController);
@@ -38,11 +46,11 @@ export class EditEmbeddingNodeBase extends Component {
         this.nameLabel = funcNode.getChildByName('nameLabel');
         this.backgroundGraphic = funcNode.getComponent(Graphics);
         this.connectLineGraphic = funcNode.getChildByPath('connectGraphButton/connectLineGraph').getComponent(Graphics);
-        this.outPutNode = funcNode.getChildByName('connectGraphButton');
+        this.outputNode = funcNode.getChildByName('connectGraphButton');
         this.inputNode1 = funcNode.getChildByName('inputButton1');
         this.inputNode2 = funcNode.getChildByName('inputButton2');
-
     }
+
 
     /**只有第一次设置有效 */
     public set nodeType(val) {
@@ -52,33 +60,132 @@ export class EditEmbeddingNodeBase extends Component {
     }
 
     public get nodeType() {
+        console.log('nodetype: ' + this._nodeType);
         return this._nodeType;
     }
 
-    private onMoveButtonClick = (e: EventTouch) => {
-        console.log('click move button');
-        const parent = this.node.parent;
-        parent.removeChild(this.node);
-        parent.addChild(this.node);
-        console.log(this.node.worldPosition);
-        console.log(e.touch.getLocation());
-        console.log(e.touch.getUILocation());
-        const pos = e.touch.getUILocation();
-        // this.node.setWorldPosition(pos.x, pos.y, 0);
+    public set outputType(val) {
+        if (val === EditEmbeddingNodeType.Number || val === EditEmbeddingNodeType.Voxel)
+            this._outputType = val;
     }
 
-    public clickQuery(clickPos: Vec2, out: OutString): boolean {
+    public get outputType() {
+        return this._outputType;
+    }
+
+    protected set value(val: any) {
+        this._value = val;
+    }
+
+    public get value() {
+        console.log('return value: ' + this._value);
+        return this._value;
+    }
+
+    /**
+     * 
+     * @param clickPos 
+     * @param out out.node 为点击中的input或output button节点
+     * @returns 
+     */
+    public clickQuery(clickPos: Vec2, out: OutInfo): boolean {
         if (clickPos.x > this.node.worldPosition.x + this.nodeBoundingBox.left && clickPos.x < this.node.worldPosition.x + this.nodeBoundingBox.right &&
         clickPos.y > this.node.worldPosition.y + this.nodeBoundingBox.bottom && clickPos.y < this.node.worldPosition.y + this.nodeBoundingBox.top) {
-            out.str = 'move';
+            if (this.inputNode1.active && Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)) < 2.5) {
+                console.log('distance');
+                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
+                out.str = 'input';
+                out.node = this.inputNode1;
+            } else if (this.inputNode2.active && Vec2.distance(clickPos, new Vec2(this.inputNode2.worldPosition.x, this.inputNode2.worldPosition.y)) < 2.5) {
+                console.log('distance');
+                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
+                out.str = 'input';
+                out.node = this.inputNode2;
+            } else if (Vec2.distance(clickPos, new Vec2(this.outputNode.worldPosition.x, this.outputNode.worldPosition.y)) < 2.5) {
+                console.log('distance');
+                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
+                out.str = 'output';
+                out.node = this.outputNode;
+            } else {
+                out.str = 'move';
+            }
             return true;
         }
         return false;
     }
+
+    /**from和input都是button节点，不要传错了 */
+    public setInput(from: Node, input: Node): boolean {
+        return true;
+    }
+
+    /**
+     * 从input删除链接
+     * @param infrom 
+     */
+    public cancelConnectInput(inNode: Node) {
+        if (inNode === this.inputNode1) {
+            const eeno = this.inputFrom1?.getParent().getParent().getComponent(EditEmbeddingNodeBase);
+            eeno.outputTo = null;
+            eeno.connectLineGraphic.clear();
+            this.inputFrom1 = null;
+        } else if (inNode === this.inputNode2) {
+            const eeno = this.inputFrom2?.getParent().getParent().getComponent(EditEmbeddingNodeBase);
+            eeno.outputTo = null;
+            eeno.connectLineGraphic.clear();
+            this.inputFrom2 = null;
+        } else {
+            console.error('cancelConnectInput 节点错误');
+        }
+        this.setOutputLabel();
+    }
+
+    /**
+     * 从output删除链接
+     */
+    public cancelConnectOuput(): boolean {
+        if (!this.outputTo)
+            return true;
+        // if (!outputEENB) {
+        const outputEENB = this.outputTo.getParent().getParent().getComponent(EditEmbeddingNodeBase);
+        if (this.outputNode === outputEENB.inputFrom1) 
+            outputEENB.inputFrom1 = null;
+        else if (this.outputNode === outputEENB.inputFrom2) 
+            outputEENB.inputFrom2 = null;
+        else {
+            console.error('cancelConnectOuput 找不到该output对应的inputfrom');
+            return false;
+        }
+        outputEENB.setOutputLabel();
+        this.outputTo = null;
+        this.outputNode.getChildByName('connectLineGraph').getComponent(Graphics).clear();
+        return true;
+    }
+
+    public setOutputLabel() {
+        if (!this.inputFrom1 && !this.inputFrom2) {
+            this.outputNode.getChildByName('outputType').getComponent(Label).string = '';
+            this.outputType = EditEmbeddingNodeType.None;
+        }
+    }
+
+    /**传入outputnode */
+    public changeInputValue(from: Node) {
+        console.log('change value');
+
+        if (from === this.inputFrom1 || from === this.inputFrom2) {
+            console.log('change value finish');
+            this.isInputChange = true;
+
+        }
+    }
+
+    
 }
 
-export type OutString = {
-    str: string
+export type OutInfo = {
+    str: string,
+    node: Node
 }
 
 
