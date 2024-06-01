@@ -1,12 +1,13 @@
 import { _decorator, Component, instantiate, Label, Node, Vec2 } from 'cc';
 import { EditEmbeddingNodeBase } from './EditEmbeddingNodeBase';
-import { EditEmbeddingNodeType } from '../Utils/Utils';
+import { EditEmbeddingNodeType, EditEmbeddingOutputType, EENTypeWithDiffOperand } from '../Utils/Utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('EditEmbeddingNodeOperation')
 export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
 
     private numLabel: Label = null;
+    private _nodeName: string = null;
 
     start() {
         /**整体bg */
@@ -19,8 +20,8 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, 15);
         this.backgroundGraphic.fill();
         this.nodeBoundingBox = {
-            left: -32, 
-            right: 32,
+            left: -34, 
+            right: 34,
             top: 15,
             bottom: -35 
         }
@@ -34,7 +35,13 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, 15);
         this.backgroundGraphic.fill();
         this.nameLabel.setPosition(0, 15);
-        this.nameLabel.getComponent(Label).string = this.nodeType;
+        this.nameLabel.getComponent(Label).string = this.nodeName;
+        this.inputNode1.active = true;
+        this.inputNode2.active = true;
+        if (this.nodeType === EditEmbeddingNodeType.Divide) {
+            this.inputNode1.getChildByName('inputType').getComponent(Label).string = 'divisor';
+            this.inputNode2.getChildByName('inputType').getComponent(Label).string = 'dividend';
+        }
 
         /**input bg */
         this.backgroundGraphic.moveTo(-32, 0);
@@ -43,9 +50,9 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, -20);
         this.backgroundGraphic.lineTo(-32, 0);
         this.backgroundGraphic.fill();
-        this.inputNode1.setPosition(-27, -5);
-        this.inputNode2.setPosition(-27, -15);
-        this.outputNode.setPosition(27, -10);
+        this.inputNode1.setPosition(-32, -5);
+        this.inputNode2.setPosition(-32, -15);
+        this.outputNode.setPosition(32, -10);
 
         /**show number bg */
         this.backgroundGraphic.moveTo(-32, -21);
@@ -68,6 +75,15 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         }
     }
 
+    public set nodeName(val: string) {
+        if (!this._nodeName)
+            this._nodeName = val;
+    }
+
+    public get nodeName() {
+        return this._nodeName;
+    }
+
     /**from和input都是button节点，不要传错了 */
     public override setInput(from: Node, input: Node): boolean {
         // const otherInput = input === this.inputNode1 ? this.inputNode2 : this.inputNode1;
@@ -78,9 +94,10 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         // if (!thisEENB.cancelConnectOuput())
         //     return false;
         const otherType = otherFrom?.getParent().getParent().getComponent(EditEmbeddingNodeBase).outputType;
-        if (!otherFrom || (thisEENB.outputType === EditEmbeddingNodeType.Number && otherType === EditEmbeddingNodeType.Number) ||
-            (thisEENB.outputType === otherType && this.nodeType !== EditEmbeddingNodeType.Multiply && this.nodeType !== EditEmbeddingNodeType.Divide) ||
-            (thisEENB.outputType !== otherType && (this.nodeType === EditEmbeddingNodeType.Multiply || this.nodeType === EditEmbeddingNodeType.Divide))) {
+        if (!otherFrom
+            || (thisEENB.outputType !== otherType && (this.nodeType & EENTypeWithDiffOperand)) 
+            || (thisEENB.outputType === otherType && this.nodeType !== EditEmbeddingNodeType.BiDirAdd)
+            ) {
             if (originFrom) {
                 const eeno = originFrom.getParent().getParent().getComponent(EditEmbeddingNodeBase);
                 eeno.outputTo = null;
@@ -98,9 +115,6 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
                 this.inputFrom1 = from;
             else 
                 this.inputFrom2 = from;
-
-            // this.outputType = thisEENB.outputType;
-            // this.outputNode.getChildByName('outputType').getComponent(Label).string = thisEENB.outputType;
             
         } else 
             return false;
@@ -112,6 +126,10 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         return true;
     }
 
+    // TODO: 新增几种运算：
+    // 目前来看，影响向量转换体素的是较大维度之间的差值大小，如果单纯改变一个embedding的比例（乘一个值），会形变很严重；如果把两个向量相加，反而保留特征的比较好，比使用max还好，所以要看看两个embeding最大值拉平之后，
+    // 既然现在一般运算的结果很差，那么也可以利用“阈值消去低部来删除翅膀特征”这个思路，干脆对用户开放完全embedding自由编辑，让用户自己选择需要保留的维度、哪几个维度需要保持差值之类的
+    // 实验一下过阈值之后再加到汽车上去，或者和汽车过一个max的结果，单纯做阈值说不定本来就不好看，要结合其他的一起看，或者过阈值不应该给0，而是应该给0.1、0.2这样
     /**计算该运算符的值，并通知output后继节点数值改变 */
     private calculateNode() {
         const originVal = this.value;
@@ -119,108 +137,137 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         const eenb2 = this.inputFrom2.getParent().getParent().getComponent(EditEmbeddingNodeBase);
         switch (this.nodeType) {
             case EditEmbeddingNodeType.Add:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number) {
-                    this.value = eenb1.value + eenb2.value;
-                    this.outputType = EditEmbeddingNodeType.Number;
+                if (eenb1.outputType === EditEmbeddingOutputType.Number) {
+                    if (eenb2.outputType === EditEmbeddingOutputType.Number) {
+                        this.value = eenb1.value + eenb2.value;
+                        this.outputType = EditEmbeddingOutputType.Number;
+                    } else {
+                        this.value = new Array(128);
+                        for (let i = 0; i < 128; i++)
+                            this.value[i] = eenb1.value + eenb2.value[i];
+                        this.outputType = EditEmbeddingOutputType.Voxel;
+                    }
                 } else {
                     this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
-                        this.value[i] = eenb1.value[i] + eenb2.value[i];
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                    if (eenb2.outputType === EditEmbeddingOutputType.Number) {
+                        for (let i = 0; i < 128; i++)
+                            this.value[i] = eenb1.value[i] + eenb2.value;
+                        this.outputType = EditEmbeddingOutputType.Voxel;
+                    } else {
+                        for (let i = 0; i < 128; i++)
+                            this.value[i] = eenb1.value[i] + eenb2.value[i];
+                        this.outputType = EditEmbeddingOutputType.Voxel;
+                    }
                 }
                 break;
 
 
-            case EditEmbeddingNodeType.Subtract:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number) {
-                    this.value = eenb1.value - eenb2.value;
-                    this.outputType = EditEmbeddingNodeType.Number;
-                } else {
-                    this.value = new Array(128);
+            case EditEmbeddingNodeType.BiDirAdd:
+                this.value = new Array(128);
+                if (eenb1.outputType === EditEmbeddingOutputType.Number) {
                     for (let i = 0; i < 128; i++)
-                        this.value[i] = eenb1.value[i] - eenb2.value[i];
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                        this.value[i] = eenb1.value * Math.sign(eenb2.value[i]) + eenb2.value[i];
+                } else {
+                    for (let i = 0; i < 128; i++)
+                        this.value[i] = eenb1.value[i] + eenb2.value * Math.sign(eenb1.value[i]);
+                    
                 }
+                this.outputType = EditEmbeddingOutputType.Voxel;
                 break;
 
             case EditEmbeddingNodeType.Multiply:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number && eenb2.outputType === EditEmbeddingNodeType.Number) {
+                if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     this.value = eenb1.value * eenb2.value;
-                    this.outputType = EditEmbeddingNodeType.Number;
-                } else if (eenb1.outputType === EditEmbeddingNodeType.Number && eenb2.outputType === EditEmbeddingNodeType.Voxel) {
+                    this.outputType = EditEmbeddingOutputType.Number;
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Voxel) {
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
                         this.value[i] = eenb1.value * eenb2.value[i];
-                    this.outputType = EditEmbeddingNodeType.Voxel;
-                } else if (eenb1.outputType === EditEmbeddingNodeType.Voxel && eenb2.outputType === EditEmbeddingNodeType.Number) {
+                    this.outputType = EditEmbeddingOutputType.Voxel;
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Voxel && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
                         this.value[i] = eenb2.value * eenb1.value[i];
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                    this.outputType = EditEmbeddingOutputType.Voxel;
                 }
                 break;
 
             case EditEmbeddingNodeType.Divide:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number && eenb2.outputType === EditEmbeddingNodeType.Number) {
+                if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     if (eenb2.value === 0)
                         return;
                     this.value = eenb1.value / eenb2.value;
-                    this.outputType = EditEmbeddingNodeType.Number;
-                } else if (eenb1.outputType === EditEmbeddingNodeType.Number && eenb2.outputType === EditEmbeddingNodeType.Voxel) {
+                    this.outputType = EditEmbeddingOutputType.Number;
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Voxel) {
                     if (eenb1.value === 0)
                         return;
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
-                        this.value[i] = eenb2.value[i] / eenb1.value;
-                    this.outputType = EditEmbeddingNodeType.Voxel;
-                } else if (eenb1.outputType === EditEmbeddingNodeType.Voxel && eenb2.outputType === EditEmbeddingNodeType.Number) {
+                        this.value[i] = eenb1.value / (eenb2.value[i] === 0 ? 0.01 : eenb2.value[i]);
+                    this.outputType = EditEmbeddingOutputType.Voxel;
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Voxel && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     if (eenb2.value === 0)
                         return;
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
-                        this.value[i] = eenb1.value[i] / eenb2.value;
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                        this.value[i] = eenb1.value[i] / (eenb2.value === 0 ? 0.01 : eenb2.value);
+                    this.outputType = EditEmbeddingOutputType.Voxel;
                 }
                 break;
 
             case EditEmbeddingNodeType.Max:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number) {
+                if (eenb1.outputType === EditEmbeddingOutputType.Number) {
                     this.value = Math.max(eenb1.value, eenb2.value);
-                    this.outputType = EditEmbeddingNodeType.Number;
+                    this.outputType = EditEmbeddingOutputType.Number;
                 } else {
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
-                        this.value[i] = Math.max(eenb1.value[i], eenb2.value[i]);
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                        this.value[i] = Math.abs(eenb1.value[i]) > Math.abs(eenb2.value[i]) ? eenb1.value[i] : eenb2.value[i];
+                    this.outputType = EditEmbeddingOutputType.Voxel;
                 }
                 break;
 
             case EditEmbeddingNodeType.Min:
-                if (eenb1.outputType === EditEmbeddingNodeType.Number) {
+                if (eenb1.outputType === EditEmbeddingOutputType.Number) {
                     this.value = Math.min(eenb1.value, eenb2.value);
-                    this.outputType = EditEmbeddingNodeType.Number;
+                    this.outputType = EditEmbeddingOutputType.Number;
                 } else {
                     this.value = new Array(128);
                     for (let i = 0; i < 128; i++)
-                        this.value[i] = Math.min(eenb1.value[i], eenb2.value[i]);
-                    this.outputType = EditEmbeddingNodeType.Voxel;
+                        this.value[i] = Math.abs(eenb1.value[i]) < Math.abs(eenb2.value[i]) ? eenb1.value[i] : eenb2.value[i];
+                    this.outputType = EditEmbeddingOutputType.Voxel;
                 }
                 break;
         }
 
         this.outputNode.getChildByName('outputType').getComponent(Label).string = this.outputType;
 
-        if (this.outputType === EditEmbeddingNodeType.Number) {
+        if (this.outputType === EditEmbeddingOutputType.Number) {
             this.numLabel.string = this.value;
         }
+
         if (originVal !== this.value) {
             this.outputTo?.getParent().getParent().getComponent(EditEmbeddingNodeBase).changeInputValue(this.outputNode);
         }
         this.isInputChange = false;
     }
 
-    public override setOutputLabel() {
-        super.setOutputLabel();
+    public override cancelConnectInput(inNode: Node) {
+        super.cancelConnectInput(inNode);
+        this.setOutputLabel();
+    }
+
+    public override cancelConnectOuput(): boolean {
+        const res = super.cancelConnectOuput();
+        this.setOutputLabel();
+        return res;
+    }
+
+    public setOutputLabel() {
+        if (!this.inputFrom1 && !this.inputFrom2) {
+            this.outputNode.getChildByName('outputType').getComponent(Label).string = '';
+            this.outputType = EditEmbeddingOutputType.None;
+        }
         this.numLabel.string = '';
     }
 

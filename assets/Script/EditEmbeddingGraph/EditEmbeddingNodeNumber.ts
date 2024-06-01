@@ -1,6 +1,6 @@
 import { _decorator, Component, EditBox, EventHandler, instantiate, Label, Node, Vec2 } from 'cc';
 import { EditEmbeddingNodeBase } from './EditEmbeddingNodeBase';
-import { EditEmbeddingNodeType } from '../Utils/Utils';
+import { EditEmbeddingNodeType, EditEmbeddingOutputType } from '../Utils/Utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('EditEmbeddingNodeNumber')
@@ -18,8 +18,8 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, 15);
         this.backgroundGraphic.fill();
         this.nodeBoundingBox = {
-            left: -32, 
-            right: 32,
+            left: -34, 
+            right: 34,
             top: 15,
             bottom: -32 
         }
@@ -34,8 +34,7 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.fill();
         this.nameLabel.setPosition(0, 15);
         this.nameLabel.getComponent(Label).string = 'Constant';
-        this.nodeType = EditEmbeddingNodeType.Number;
-        this.outputType = EditEmbeddingNodeType.Number;
+        this.outputType = EditEmbeddingOutputType.Number;
         this.outputNode.getChildByName('outputType').getComponent(Label).string = 'Constant';
       
         /**input bg */
@@ -45,9 +44,7 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, -15);
         this.backgroundGraphic.lineTo(-32, 0);
         this.backgroundGraphic.fill();
-        this.outputNode.setPosition(27, -8);
-        this.inputNode1.active = false;
-        this.inputNode2.active = false;
+        this.outputNode.setPosition(32, -8);
 
         /**text input bg */
         this.backgroundGraphic.moveTo(-32, -16);

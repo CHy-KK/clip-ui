@@ -5,6 +5,7 @@ import { EditEmbeddingNodeVoxel } from './EditEmbeddingNodeVoxel';
 import { EditEmbeddingNodeBase, OutInfo } from './EditEmbeddingNodeBase';
 import { EditEmbeddingNodeNumber } from './EditEmbeddingNodeNumber';
 import { EditEmbeddingNodeType } from '../Utils/Utils';
+import { EditEmbeddingNodeThreshold } from './EditEmbeddingNodeThreshold';
 const { ccclass, property } = _decorator;
 
 const opPriority = new Map();
@@ -37,7 +38,7 @@ export class EditEmbeddingGraphController extends Component {
     private operations = []; 
     /**对应每一步operation在ui上的长度，在backspace时用来调整position */
     private operationsLength = [];
-    private controller: MainController = null;
+    private _controller: MainController = null;
     private opStack: string[] = [];
     /**
      * @type number
@@ -46,7 +47,7 @@ export class EditEmbeddingGraphController extends Component {
     private embStack: any[] = [];
     /**记录当前公式长度 */
     private formulaEndPos: Vec3 = new Vec3();
-    private showFormulaNode: Node = null;
+    private editNode: Node = null;
     private constantInputNode: Node = null;
 
     /**记录当前是否处于链接两个embedding node */
@@ -82,10 +83,17 @@ export class EditEmbeddingGraphController extends Component {
         this._isConnecting = val;
     }
     
+    public get controller() {
+        return this._controller;
+    }
+    
+    private set controller(val) {
+        this._controller = val;
+    }
 
     start() {
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
-        this.showFormulaNode = this.node.getChildByPath('showFormula/EditNode');
+        this.editNode = this.node.getChildByPath('showFormula/EditNode');
         this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
         const editGraphMask = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
         editGraphMask.fillColor.fromHEX('#444444');
@@ -290,11 +298,7 @@ export class EditEmbeddingGraphController extends Component {
     }
 
     public clearEdit()  {
-        this.opStack = [];
-        this.embStack = [];
-        this.operations = [];
-        this.node.getChildByName('showFormula').destroyAllChildren();
-        this.formulaEndPos = new Vec3();
+        this.editNode.destroyAllChildren();
     }
 
     public calculateEdit() {
@@ -324,11 +328,11 @@ export class EditEmbeddingGraphController extends Component {
         eenv.voxelSnapShot = curSp;
         eenv.setEmbd(curEmb);
 
-        this.showFormulaNode.addChild(voxelNode);
+        this.editNode.addChild(voxelNode);
         
         // this.operationsLength.push(55);
         // this.formulaEndPos.add(new Vec3(55, 0, 0));
-        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
     public addConstantToEdit() {
@@ -340,14 +344,14 @@ export class EditEmbeddingGraphController extends Component {
         const numNode = new Node();
         numNode.layer = this.node.layer;
         numNode.addComponent(EditEmbeddingNodeNumber);
-        this.showFormulaNode.addChild(numNode);
+        this.editNode.addChild(numNode);
 
 
             // numNode.setPosition(this.formulaEndPos);
             // this.operations.push(num);
             // this.operationsLength.push(10 * inputConstant.length);
             // this.formulaEndPos.add(new Vec3(10 * inputConstant.length, 0, 0));
-            // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+            // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
         // }
     }
 
@@ -360,14 +364,22 @@ export class EditEmbeddingGraphController extends Component {
         // opLabel.lineHeight = 15;
         // opNode.getComponent(UITransform).anchorPoint.set(0, 0.5);
         // opNode.layer = this.node.layer;
-        // this.showFormulaNode.addChild(opNode);
+        // this.editNode.addChild(opNode);
         // opNode.setPosition(this.formulaEndPos);
 
         const opNode = new Node();
         opNode.layer = this.node.layer;
         const eeno = opNode.addComponent(EditEmbeddingNodeOperation);
-        eeno.nodeType = EditEmbeddingNodeType[op];
-        this.showFormulaNode.addChild(opNode);
+        switch(op) {
+            case 'Add': eeno.nodeType = EditEmbeddingNodeType.Add; break;
+            case 'BiDirAdd': eeno.nodeType = EditEmbeddingNodeType.BiDirAdd; break;
+            case 'Multiply': eeno.nodeType = EditEmbeddingNodeType.Multiply; break;
+            case 'Divide': eeno.nodeType = EditEmbeddingNodeType.Divide; break;
+            case 'Max': eeno.nodeType = EditEmbeddingNodeType.Max; break;
+            case 'Min': eeno.nodeType = EditEmbeddingNodeType.Min; break;
+        }
+        eeno.nodeName = op;
+        this.editNode.addChild(opNode);
 
         // if (op === 'max' || op === 'min') {
         //     this.operations.push(op);
@@ -381,16 +393,23 @@ export class EditEmbeddingGraphController extends Component {
         //     this.operationsLength.push(15);
         //     this.formulaEndPos.add(new Vec3(15, 0, 0));
         // }
-        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
         // console.log(this.operations);
+    }
+
+    public onThresholdButtonClick() {
+        const thNode = new Node();
+        thNode.layer = this.node.layer;
+        thNode.addComponent(EditEmbeddingNodeThreshold);
+        this.editNode.addChild(thNode);
     }
 
     public onBackSpaceButtonClick() {
         // this.operations.pop();
-        // this.showFormulaNode.children.pop();
+        // this.editNode.children.pop();
         // const offset = this.operationsLength.pop();
         // this.formulaEndPos.subtract(new Vec3(offset, 0, 0));
-        // this.showFormulaNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
+        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
     private onMouseDown(e: EventMouse) {
@@ -399,7 +418,7 @@ export class EditEmbeddingGraphController extends Component {
         if (e.getButton() === EventMouse.BUTTON_RIGHT) {
             
         } else if (e.getButton() === EventMouse.BUTTON_LEFT) {
-            const childList = this.showFormulaNode.children;
+            const childList = this.editNode.children;
             this.draggingNode = null;
             for (let i = childList.length - 1; i >= 0; i--) {
                 // getcomponent会查询派生
@@ -416,8 +435,8 @@ export class EditEmbeddingGraphController extends Component {
                         this.isDragNode = true;
                         Vec2.subtract(this.dragOffset, new Vec2(childList[i].worldPosition.x, childList[i].worldPosition.y), e.getUILocation());
                         this.draggingNode = childList[i];
-                        this.showFormulaNode.removeChild(this.draggingNode);
-                        this.showFormulaNode.addChild(this.draggingNode);
+                        this.editNode.removeChild(this.draggingNode);
+                        this.editNode.addChild(this.draggingNode);
                     }
                     break;
                 }
@@ -459,7 +478,17 @@ export class EditEmbeddingGraphController extends Component {
                 g2.lineTo(lineTarget.x, lineTarget.y);
                 g2.stroke();    
             }
+            if (dragEENB.inputFrom3) {
+                const from3 = dragEENB.inputFrom3.getChildByName('connectLineGraph');
+                const g3 = from3.getComponent(Graphics);
+                g3.clear();
+                g3.moveTo(0, 0);
+                const lineTarget = (new Vec2(dragEENB.inputNode3.worldPosition.x, dragEENB.inputNode3.worldPosition.y)).subtract(new Vec2(from3.worldPosition.x, from3.worldPosition.y));
+                g3.lineTo(lineTarget.x, lineTarget.y);
+                g3.stroke();    
+            }
             if (dragEENB.outputTo) {
+                console.log('move output node');
                 const go = dragEENB.connectLineGraphic;
                 go.clear();
                 go.moveTo(0, 0);
@@ -471,7 +500,7 @@ export class EditEmbeddingGraphController extends Component {
     }
 
     private onMouseUp(e: EventMouse) {
-        const childList = this.showFormulaNode.children;
+        const childList = this.editNode.children;
         for (let i = childList.length - 1; i >= 0; i--) {
             // getcomponent会查询派生
             const een = childList[i].getComponent(EditEmbeddingNodeBase);

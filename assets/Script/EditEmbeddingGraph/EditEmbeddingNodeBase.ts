@@ -1,5 +1,5 @@
 import { _decorator, Button, Component, director, EventHandheld, EventHandle, EventHandler, EventTouch, Graphics, Input, instantiate, Label, Node, Sprite, UITransform, Vec2, Vec3 } from 'cc';
-import { EditEmbeddingNodeType, RectSize } from '../Utils/Utils';
+import { EditEmbeddingNodeType, EditEmbeddingOutputType, RectSize } from '../Utils/Utils';
 import { EditEmbeddingGraphController } from './EditEmbeddingGraphController';
 const { ccclass, property, requireComponent } = _decorator;
 
@@ -15,10 +15,14 @@ export class EditEmbeddingNodeBase extends Component {
     public inputNode1: Node = null;
     /**本节点的input button节点 */
     public inputNode2: Node = null;
+    /**本节点的input button节点 */
+    public inputNode3: Node = null;
     /**记录连接本节点的前继输入节点的output button节点 */
     public inputFrom1: Node = null;
     /**记录连接本节点的前继输入节点的output button节点 */
     public inputFrom2: Node = null;
+    /**记录连接本节点的前继输入节点的output button节点 */
+    public inputFrom3: Node = null;
     /**本节点输出的button节点 */
     public outputNode: Node = null;
     /**记录本节点连接的输出目标节点的button节点 */
@@ -28,7 +32,7 @@ export class EditEmbeddingNodeBase extends Component {
 
     protected EEGController: EditEmbeddingGraphController = null;
     protected _nodeType: EditEmbeddingNodeType = null;
-    protected _outputType: EditEmbeddingNodeType = null;
+    protected _outputType: EditEmbeddingOutputType = null;
 
     /**记录该节点包围盒 */
     public nodeBoundingBox: RectSize = null;
@@ -49,6 +53,7 @@ export class EditEmbeddingNodeBase extends Component {
         this.outputNode = funcNode.getChildByName('connectGraphButton');
         this.inputNode1 = funcNode.getChildByName('inputButton1');
         this.inputNode2 = funcNode.getChildByName('inputButton2');
+        this.inputNode3 = funcNode.getChildByName('inputButton3');
     }
 
 
@@ -60,12 +65,11 @@ export class EditEmbeddingNodeBase extends Component {
     }
 
     public get nodeType() {
-        console.log('nodetype: ' + this._nodeType);
         return this._nodeType;
     }
 
     public set outputType(val) {
-        if (val === EditEmbeddingNodeType.Number || val === EditEmbeddingNodeType.Voxel)
+        if (val === EditEmbeddingOutputType.Number || val === EditEmbeddingOutputType.Voxel)
             this._outputType = val;
     }
 
@@ -78,7 +82,6 @@ export class EditEmbeddingNodeBase extends Component {
     }
 
     public get value() {
-        console.log('return value: ' + this._value);
         return this._value;
     }
 
@@ -92,18 +95,15 @@ export class EditEmbeddingNodeBase extends Component {
         if (clickPos.x > this.node.worldPosition.x + this.nodeBoundingBox.left && clickPos.x < this.node.worldPosition.x + this.nodeBoundingBox.right &&
         clickPos.y > this.node.worldPosition.y + this.nodeBoundingBox.bottom && clickPos.y < this.node.worldPosition.y + this.nodeBoundingBox.top) {
             if (this.inputNode1.active && Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)) < 2.5) {
-                console.log('distance');
-                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
                 out.str = 'input';
                 out.node = this.inputNode1;
             } else if (this.inputNode2.active && Vec2.distance(clickPos, new Vec2(this.inputNode2.worldPosition.x, this.inputNode2.worldPosition.y)) < 2.5) {
-                console.log('distance');
-                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
                 out.str = 'input';
                 out.node = this.inputNode2;
+            } else if (this.inputNode3.active && Vec2.distance(clickPos, new Vec2(this.inputNode3.worldPosition.x, this.inputNode3.worldPosition.y)) < 2.5) {
+                out.str = 'input';
+                out.node = this.inputNode3;
             } else if (Vec2.distance(clickPos, new Vec2(this.outputNode.worldPosition.x, this.outputNode.worldPosition.y)) < 2.5) {
-                console.log('distance');
-                console.log(Vec2.distance(clickPos, new Vec2(this.inputNode1.worldPosition.x, this.inputNode1.worldPosition.y)));
                 out.str = 'output';
                 out.node = this.outputNode;
             } else {
@@ -120,8 +120,7 @@ export class EditEmbeddingNodeBase extends Component {
     }
 
     /**
-     * 从input删除链接
-     * @param infrom 
+     * 从input删除链接, 删除链接不改变节点value
      */
     public cancelConnectInput(inNode: Node) {
         if (inNode === this.inputNode1) {
@@ -134,14 +133,18 @@ export class EditEmbeddingNodeBase extends Component {
             eeno.outputTo = null;
             eeno.connectLineGraphic.clear();
             this.inputFrom2 = null;
+        } else if (inNode === this.inputNode3) {
+            const eeno = this.inputFrom3?.getParent().getParent().getComponent(EditEmbeddingNodeBase);
+            eeno.outputTo = null;
+            eeno.connectLineGraphic.clear();
+            this.inputFrom3 = null;
         } else {
             console.error('cancelConnectInput 节点错误');
         }
-        this.setOutputLabel();
     }
 
     /**
-     * 从output删除链接
+     * 从output删除链接, 删除链接不改变节点value
      */
     public cancelConnectOuput(): boolean {
         if (!this.outputTo)
@@ -152,35 +155,26 @@ export class EditEmbeddingNodeBase extends Component {
             outputEENB.inputFrom1 = null;
         else if (this.outputNode === outputEENB.inputFrom2) 
             outputEENB.inputFrom2 = null;
+        else if (this.outputNode === outputEENB.inputFrom3) 
+            outputEENB.inputFrom3 = null;
         else {
             console.error('cancelConnectOuput 找不到该output对应的inputfrom');
             return false;
         }
-        outputEENB.setOutputLabel();
         this.outputTo = null;
         this.outputNode.getChildByName('connectLineGraph').getComponent(Graphics).clear();
         return true;
     }
 
-    public setOutputLabel() {
-        if (!this.inputFrom1 && !this.inputFrom2) {
-            this.outputNode.getChildByName('outputType').getComponent(Label).string = '';
-            this.outputType = EditEmbeddingNodeType.None;
-        }
-    }
+ 
 
     /**传入outputnode */
     public changeInputValue(from: Node) {
-        console.log('change value');
-
-        if (from === this.inputFrom1 || from === this.inputFrom2) {
+        if (from === this.inputFrom1 || from === this.inputFrom2  || from === this.inputFrom3) {
             console.log('change value finish');
             this.isInputChange = true;
-
         }
     }
-
-    
 }
 
 export type OutInfo = {

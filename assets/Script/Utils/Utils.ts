@@ -39,7 +39,8 @@ export enum RequestName {
     SendImage = '/get_embeddings_by_image',
     GetContour = '/get_contour_img',
     SendPrompt = '/get_embeddings_by_text_query',
-    UploadVoxel = '/upload_voxel'
+    UploadVoxel = '/upload_voxel',
+    GetVoxelByEmbedding = '/get_voxel_by_embedding'
 };
 
 export enum SelectingType {
@@ -78,18 +79,27 @@ export enum EditState {
 }
 
 export enum EditEmbeddingNodeType {
-    Add = 'Add',
-    Subtract = 'Subtract',
-    Multiply = 'Multiply',
-    Divide = 'Divide',
-    Max = 'Max',
-    Min = 'Min',
+    Add = 1,
+    BiDirAdd = 2,
+    Multiply = 4,
+    Divide = 8,
+    Max = 16,
+    Min = 32,
+    Voxel = 64,  
+    Number = 128,
+    Threshold = 256
+}
+
+export const EENTypeWithDiffOperand = EditEmbeddingNodeType.BiDirAdd | EditEmbeddingNodeType.Multiply | EditEmbeddingNodeType.Divide | EditEmbeddingNodeType.Add;
+
+export enum EditEmbeddingOutputType {
     /**Voxel embedding */ 
     Voxel = 'Voxel',  
-    Number = 'Constant',
+    Number = 'Number',
     /**当前节点输入类型不满足时 */
     None = 'None'
 }
+
 
 export const type2Color = [
     'FF0000',
