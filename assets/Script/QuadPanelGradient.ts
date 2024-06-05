@@ -11,16 +11,16 @@ export class QuadPanelGradient extends Component {
     start() {
         // 选中两点时   
         const vertexs2 = [
-            0, 30, 0, 
-            200, 30, 0,
-            0, 40, 0,
-            200, 40, 0,
+            0, 32, 0, 
+            200, 32, 0,
+            0, 38, 0,
+            200, 38, 0,
         ];
 
         const uvs2 = [
-            0, 1,
+            0, 0,
             1, 0,
-            0, 1,
+            0, 0,
             1, 0
         ];
 

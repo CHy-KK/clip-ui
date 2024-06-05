@@ -4,7 +4,7 @@ import { EditEmbeddingNodeOperation } from './EditEmbeddingNodeOperation';
 import { EditEmbeddingNodeVoxel } from './EditEmbeddingNodeVoxel';
 import { EditEmbeddingNodeBase, OutInfo } from './EditEmbeddingNodeBase';
 import { EditEmbeddingNodeNumber } from './EditEmbeddingNodeNumber';
-import { EditEmbeddingNodeType } from '../Utils/Utils';
+import { drawRect, drawRoundRect, EditEmbeddingNodeType } from '../Utils/Utils';
 import { EditEmbeddingNodeThreshold } from './EditEmbeddingNodeThreshold';
 const { ccclass, property } = _decorator;
 
@@ -19,7 +19,6 @@ opPriority.set('min', 2);
 
 @ccclass('EditEmbeddingGraphController')
 export class EditEmbeddingGraphController extends Component {
-
     
     @property(Prefab)
     public readonly EditGraphNodePrefab: Prefab = null;
@@ -95,13 +94,25 @@ export class EditEmbeddingGraphController extends Component {
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         this.editNode = this.node.getChildByPath('showFormula/EditNode');
         this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
-        const editGraphMask = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
+        const editGraphBg = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
+
+        editGraphBg.fillColor.fromHEX('#bbbbbb');
+        drawRoundRect(editGraphBg, new Vec2(-275, 300), 550, 480, 15, true);
+        editGraphBg.fill();
+
+
+        
+        const buttonBgGraph = this.node.getChildByName('ButtonBg').getComponent(Graphics);
+        buttonBgGraph.strokeColor.fromHEX('#bbbbbb');
+        buttonBgGraph.lineWidth = 3;
+        drawRect(buttonBgGraph, new Vec2(-275, -182), 550, 60);
+        buttonBgGraph.stroke();
+    }
+
+    public setMask() {
+        const editGraphMask = this.node.getChildByName('showFormula').getComponent(Graphics);
         editGraphMask.fillColor.fromHEX('#444444');
-        editGraphMask.moveTo(-275, 150);
-        editGraphMask.lineTo(275, 150);
-        editGraphMask.lineTo(275, -150);
-        editGraphMask.lineTo(-275, -150);
-        editGraphMask.lineTo(-275, 150);
+        drawRoundRect(editGraphMask, new Vec2(-275, 300), 550, 480, 15, true);
         editGraphMask.fill();
     }
 

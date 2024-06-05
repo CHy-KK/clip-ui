@@ -1,4 +1,4 @@
-import { Texture2D, Vec2, Node, instantiate } from "cc";
+import { Texture2D, Vec2, Node, instantiate, Graphics } from "cc";
 
 export type DataPoint = {
     dataPos: Vec2;
@@ -40,7 +40,8 @@ export enum RequestName {
     GetContour = '/get_contour_img',
     SendPrompt = '/get_embeddings_by_text_query',
     UploadVoxel = '/upload_voxel',
-    GetVoxelByEmbedding = '/get_voxel_by_embedding'
+    GetVoxelByEmbedding = '/get_voxel_by_embedding',
+    GetImageList = '/get_image_list'
 };
 
 export enum SelectingType {
@@ -138,4 +139,48 @@ export function angle2radian(angle: number): number {
 
 export function isPosInQuad(pos: Vec2, quad: RectSize) {
     return pos.x >= quad.left && pos.x <= quad.right && pos.y >= quad.bottom && pos.y <= quad.top;
+}
+
+/**
+ * 
+ * @param g Graphic组件
+ * @param startPoint 起始点坐标，起始点为矩形外圈左上角
+ * @param width 矩形外圈宽度
+ * @param height 矩形外圈高度
+ * @param r 圆角半径
+ * @param fillorStroke true：fill，false：stroke
+ */
+export function drawRoundRect(g: Graphics, startPoint: Vec2, width: number, height: number, r: number, fillorStroke: boolean) {
+    
+    g.moveTo(startPoint.x + r, startPoint.y);
+    g.lineTo(startPoint.x + width - r, startPoint.y);
+    if (fillorStroke)
+        g.lineTo(startPoint.x + width, startPoint.y - r);
+    else
+        g.moveTo(startPoint.x + width, startPoint.y - r);
+    g.lineTo(startPoint.x + width, startPoint.y - height + r);
+    if (fillorStroke)
+        g.lineTo(startPoint.x + width - r, startPoint.y - height);
+    else
+        g.moveTo(startPoint.x + width - r, startPoint.y - height);
+
+    g.lineTo(startPoint.x + r, startPoint.y - height);
+    if (fillorStroke)
+        g.lineTo(startPoint.x, startPoint.y - height + r);
+    else
+        g.moveTo(startPoint.x, startPoint.y - height + r);
+    g.lineTo(startPoint.x, startPoint.y - r);
+    g.arc(startPoint.x + width - r, startPoint.y - r, r, angle2radian(90), angle2radian(0), false);
+    g.arc(startPoint.x + width - r, startPoint.y - height + r, r, angle2radian(0), angle2radian(-90), false);
+    g.arc(startPoint.x + r, startPoint.y - height + r, r, angle2radian(-90), angle2radian(-180), false);
+    g.arc(startPoint.x + r, startPoint.y - r, r, angle2radian(-180), angle2radian(-270), false);
+}
+
+export function drawRect(g: Graphics, startPoint: Vec2, width: number, height: number) {
+    
+    g.moveTo(startPoint.x, startPoint.y);
+    g.lineTo(startPoint.x + width, startPoint.y);
+    g.lineTo(startPoint.x + width, startPoint.y - height);
+    g.lineTo(startPoint.x, startPoint.y - height);
+    g.lineTo(startPoint.x, startPoint.y);
 }

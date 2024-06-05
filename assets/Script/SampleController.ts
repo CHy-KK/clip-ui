@@ -1,17 +1,18 @@
 import { _decorator, Button, Component, director, EventHandler, Label, Node, Slider } from 'cc';
 import { MainController } from './Controller';
+import { ScatterController } from './ScatterController';
 const { ccclass } = _decorator;
 
 @ccclass('SampleController')
 export class SampleController extends Component {
-    private controller: MainController = null;
+    private scatterController: ScatterController = null;
     private backToTotal: Node = null;
     private btButton: Button = null;
     private totalSlider: Node = null;
     private slider: Slider = null;
 
     start() {
-        this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
+        this.scatterController = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode').getComponent(ScatterController);
         this.totalSlider = this.node.getChildByName('TotalSlider');
         this.slider = this.totalSlider.getComponent(Slider);
         this.backToTotal = this.node.getChildByName('BackToTotal');
@@ -46,13 +47,13 @@ export class SampleController extends Component {
     }
 
     public checkProgress() {
-        this.controller.onChangeSlide(this.slider.progress);
+        this.scatterController.onChangeSlide(this.slider.progress);
     }
 
     public onSampleRangeButtonClick() {
         this.totalSlider.active = false;
         this.backToTotal.active = true;
-        this.controller.sampleRangeScatter();
+        this.scatterController.sampleRangeScatter();
 
     }
 

@@ -207,38 +207,38 @@ export class VoxelHistoryQueue {
     public showSnapSelect(snode: Node) {
         snode.getChildByName('blueBorder').active = true;
         
-        if (this.selectSnapNode.length === 2 && snode === this.selectSnapNode[1]) {
-            const gnode = snode.getChildByName('yellowBorder');
-            snode.removeChild(gnode);
-            gnode.destroy();
-            this.selectSnapNode.pop();
-            return;
-        } else if (this.selectSnapNode.length !== 0 && snode === this.selectSnapNode[0]) {
-            const gnode = snode.getChildByName('yellowBorder');
-            snode.removeChild(gnode);
-            gnode.destroy();
-            if (this.selectSnapNode.length === 2)
-                this.selectSnapNode[0] = this.selectSnapNode[1];
-            this.selectSnapNode.pop();
-            return;
-        }
-        // 最多允许选中两个
-        if (this.selectSnapNode.length === 2)
-            return;
-        this.selectSnapNode.push(snode);
-        const graphicNode = new Node();
-        graphicNode.name = 'yellowBorder';
-        const g = graphicNode.addComponent(Graphics);
-        g.strokeColor.fromHEX('#ffff33');
-        g.lineWidth = 2;
-        g.moveTo(-41, 41);
-        g.lineTo(41, 41);
-        g.lineTo(41, -41);
-        g.lineTo(-41, -41);
-        g.lineTo(-41, 41);
-        g.stroke();
-        snode.addChild(graphicNode);
-        graphicNode.layer = snode.layer;
+        // if (this.selectSnapNode.length === 2 && snode === this.selectSnapNode[1]) {
+        //     const gnode = snode.getChildByName('yellowBorder');
+        //     snode.removeChild(gnode);
+        //     gnode.destroy();
+        //     this.selectSnapNode.pop();
+        //     return;
+        // } else if (this.selectSnapNode.length !== 0 && snode === this.selectSnapNode[0]) {
+        //     const gnode = snode.getChildByName('yellowBorder');
+        //     snode.removeChild(gnode);
+        //     gnode.destroy();
+        //     if (this.selectSnapNode.length === 2)
+        //         this.selectSnapNode[0] = this.selectSnapNode[1];
+        //     this.selectSnapNode.pop();
+        //     return;
+        // }
+        // // 最多允许选中两个
+        // if (this.selectSnapNode.length === 2)
+        //     return;
+        // this.selectSnapNode.push(snode);
+        // const graphicNode = new Node();
+        // graphicNode.name = 'yellowBorder';
+        // const g = graphicNode.addComponent(Graphics);
+        // g.strokeColor.fromHEX('#ffff33');
+        // g.lineWidth = 2;
+        // g.moveTo(-41, 41);
+        // g.lineTo(41, 41);
+        // g.lineTo(41, -41);
+        // g.lineTo(-41, -41);
+        // g.lineTo(-41, 41);
+        // g.stroke();
+        // snode.addChild(graphicNode);
+        // graphicNode.layer = snode.layer;
     }
 
     public cancelSelect(id: string) {
