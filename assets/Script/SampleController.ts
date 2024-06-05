@@ -15,7 +15,7 @@ export class SampleController extends Component {
         this.scatterController = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode').getComponent(ScatterController);
         this.totalSlider = this.node.getChildByName('TotalSlider');
         this.slider = this.totalSlider.getComponent(Slider);
-        this.backToTotal = this.node.getChildByName('BackToTotal');
+        this.backToTotal = director.getScene().getChildByPath('mainUI/InnerUI/ScatterNode/BackToTotal');
         this.btButton = this.backToTotal.getComponent(Button);
 
         console.log(this.slider);
@@ -30,7 +30,7 @@ export class SampleController extends Component {
         const buttonEvent = new EventHandler();
         buttonEvent.target = this.node;
         buttonEvent.component = 'SampleController';
-        buttonEvent.handler = 'onBackButtonClick';
+        buttonEvent.handler = 'onSlide';
         this.btButton.clickEvents.push(buttonEvent);
     }
 
@@ -38,25 +38,8 @@ export class SampleController extends Component {
         const progress = Math.max(parseFloat(this.slider.progress.toFixed(2)), 0.01);
         this.slider.progress = progress;
         this.totalSlider.getChildByName('progress').getComponent(Label).string = (progress * 100).toFixed(0) + '%';
-    }
-
-    private onBackButtonClick() {
-        this.totalSlider.active = true;
-        this.backToTotal.active = false;
-        this.checkProgress();
-    }
-
-    public checkProgress() {
         this.scatterController.onChangeSlide(this.slider.progress);
     }
-
-    public onSampleRangeButtonClick() {
-        this.totalSlider.active = false;
-        this.backToTotal.active = true;
-        this.scatterController.sampleRangeScatter();
-
-    }
-
 
 }
 

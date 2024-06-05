@@ -1,4 +1,5 @@
-import { _decorator, Component, Label, Mesh, MeshRenderer, Node, primitives, utils, Vec3 } from 'cc';
+import { _decorator, Component, Label, Mesh, MeshRenderer, Node, primitives, utils, Vec3, Graphics, director, Vec2 } from 'cc';
+import { drawRoundRect } from './Utils/Utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('QuadPanelGradient')
@@ -7,14 +8,19 @@ export class QuadPanelGradient extends Component {
     /**记录当前选中点数量 */
     private _snNum: number = 0;
     private panelMesh: Mesh[] = [];
+    private posBg: Graphics = null;
+    private posLabel: Node = null;
+    private touchIcon: Node = null;
+    private getVoxelButton: Node = null;
+    private mr: MeshRenderer = null;
 
     start() {
         // 选中两点时   
         const vertexs2 = [
-            0, 32, 0, 
-            200, 32, 0,
-            0, 38, 0,
-            200, 38, 0,
+            0, 98, 0, 
+            200, 98, 0,
+            0, 102, 0,
+            200, 102, 0,
         ];
 
         const uvs2 = [
@@ -61,9 +67,9 @@ export class QuadPanelGradient extends Component {
         // 选中四点时
         const vertexs4 = [
             0, 0, 0, 
-            200, 0, 0,
-            0, 200, 0,
-            200, 200, 0
+            180, 0, 0,
+            0, 180, 0,
+            180, 180, 0
         ];
 
         const uvs4 = [
@@ -85,6 +91,13 @@ export class QuadPanelGradient extends Component {
             uvs: uvs4,
         }
         this.panelMesh.push(utils.createMesh(hexmap4));
+        this.posBg = this.node.getChildByPath('select2/posBg').getComponent(Graphics);
+        this.posBg.strokeColor.fromHEX('#cccccc');
+        this.posBg.lineWidth = 2;
+        this.posLabel = this.node.getChildByPath('select2/posBg/clickPos');
+        this.touchIcon = this.node.getChildByPath('select2/touchIcon');
+        this.getVoxelButton = this.node.getChildByPath('select2/getInterpolation');
+        this.mr = this.getComponent(MeshRenderer);
     }
 
     update(deltaTime: number) {
@@ -102,41 +115,55 @@ export class QuadPanelGradient extends Component {
 
     /**节点的active状态由panelnode自己控制，这里只需要控制panel形状，以及panelnode的position */
     private changePanelShape() {
-        const mr = this.getComponent(MeshRenderer);
         const childList = this.node.children;
-        const posLabel = this.node.getChildByPath('select2/clickPos').getComponent(Label);
-        const touchIcon = this.node.getChildByPath('select2/touchIcon');
         // 因为交互组件是挂载childList[1]下的，所以最好不要改childList[1]的position
         switch(this.snNum) {
             case 1: 
-                childList[0].setPosition(new Vec3(100, 30));
-                mr.mesh = null;
+                childList[0].setPosition(new Vec3(100, 100));
+                this.mr.mesh = null;
+                this.posBg.clear();
                 break;
 
             case 2:
-                childList[0].setPosition(new Vec3(0, 35));
-                childList[1].setPosition(new Vec3(200, 35));
-                touchIcon.setPosition(childList[0].position);
-                mr.mesh = this.panelMesh[0];
-                posLabel.string = 'k=0.00';
+                childList[0].setPosition(new Vec3(0, 100));
+                childList[1].setPosition(new Vec3(200, 100));
+                this.touchIcon.setPosition(childList[0].position);
+                this.mr.mesh = this.panelMesh[0];
+                this.posLabel.setPosition(100, 83);
+                this.posLabel.getComponent(Label).string = 'k=0.00';
+                this.getVoxelButton.setPosition(100, 50);
+                this.posBg.clear();
+                drawRoundRect(this.posBg, new Vec2(70, 93), 60, 20, 5, false);
+                this.posBg.stroke();
                 break;
 
             case 3: {
                 childList[0].setPosition(new Vec3(0, 0));
                 childList[1].setPosition(new Vec3(200, 0));
                 childList[2].setPosition(new Vec3(100, 175));
-                touchIcon.setPosition(childList[0].position);
-                mr.mesh = this.panelMesh[1];
-                posLabel.string = 'α=1.00, β=0.00, γ=0.00';
+                this.touchIcon.setPosition(childList[0].position);
+                this.mr.mesh = this.panelMesh[1];
+                this.posLabel.setPosition(100, -17);
+                this.posLabel.getComponent(Label).string = 'α=1.00, β=0.00, γ=0.00';
+                this.getVoxelButton.setPosition(100, -50);
+                this.posBg.clear();
+                drawRoundRect(this.posBg, new Vec2(30, -7), 140, 20, 5, false);
+                this.posBg.stroke();
                 break;
             }
 
             case 4: {
-                childList[2].setPosition(new Vec3(0, 200));
-                childList[3].setPosition(new Vec3(200, 200));
-                touchIcon.setPosition(childList[0].position);
-                mr.mesh = this.panelMesh[2];
-                posLabel.string = 'x=0.00, y=0.00';
+                childList[1].setPosition(new Vec3(180, 0));
+                childList[2].setPosition(new Vec3(0, 180));
+                childList[3].setPosition(new Vec3(180, 180));
+                this.touchIcon.setPosition(childList[0].position);
+                this.mr.mesh = this.panelMesh[2];
+                this.posLabel.setPosition(90, -17);
+                this.posLabel.getComponent(Label).string = 'x=0.00, y=0.00';
+                this.getVoxelButton.setPosition(90, -50);
+                this.posBg.clear();
+                drawRoundRect(this.posBg, new Vec2(40, -7), 100, 20, 5, false);
+                this.posBg.stroke();
                 break;
             }
         }

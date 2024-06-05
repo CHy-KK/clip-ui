@@ -96,24 +96,20 @@ export class EditEmbeddingGraphController extends Component {
         this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
         const editGraphBg = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
 
-        editGraphBg.fillColor.fromHEX('#bbbbbb');
-        drawRoundRect(editGraphBg, new Vec2(-275, 300), 550, 480, 15, true);
+        editGraphBg.fillColor.fromHEX('#dddddd');
+        const maskRect = this.node.getChildByName('showFormula').getComponent(UITransform).contentSize;
+        drawRoundRect(editGraphBg, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
         editGraphBg.fill();
+        const editGraphMask = this.node.getChildByName('showFormula').getComponent(Graphics);
 
-
+        drawRoundRect(editGraphMask, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
+        editGraphMask.fill();
         
         const buttonBgGraph = this.node.getChildByName('ButtonBg').getComponent(Graphics);
         buttonBgGraph.strokeColor.fromHEX('#bbbbbb');
         buttonBgGraph.lineWidth = 3;
         drawRect(buttonBgGraph, new Vec2(-275, -182), 550, 60);
         buttonBgGraph.stroke();
-    }
-
-    public setMask() {
-        const editGraphMask = this.node.getChildByName('showFormula').getComponent(Graphics);
-        editGraphMask.fillColor.fromHEX('#444444');
-        drawRoundRect(editGraphMask, new Vec2(-275, 300), 550, 480, 15, true);
-        editGraphMask.fill();
     }
 
     private calculateOps(op: string) {
@@ -326,9 +322,9 @@ export class EditEmbeddingGraphController extends Component {
 
     public addSnapShotToEdit() {
         const curId = this.controller.curSelectVoxelId;
-        if (this.controller.isExistHistoryList(curId) === -1) {
+        if (!this.controller.isExistHistoryList(curId)) 
             return;
-        }
+        
         const curEmb: number[] = this.controller.getVoxelEmbeddingById(curId);
         const curSp: SpriteFrame = this.controller.getVoxelSnapShotById(curId);
         this.operations.push(curEmb);
@@ -340,43 +336,16 @@ export class EditEmbeddingGraphController extends Component {
         eenv.setEmbd(curEmb);
 
         this.editNode.addChild(voxelNode);
-        
-        // this.operationsLength.push(55);
-        // this.formulaEndPos.add(new Vec3(55, 0, 0));
-        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
     public addConstantToEdit() {
-        // const inputConstant = this.constantInputNode.getComponent(Label).string;
-        // const num = parseFloat(inputConstant);
-        // console.log(num);
-        // if (!isNaN(num)) {
-            
         const numNode = new Node();
         numNode.layer = this.node.layer;
         numNode.addComponent(EditEmbeddingNodeNumber);
         this.editNode.addChild(numNode);
-
-
-            // numNode.setPosition(this.formulaEndPos);
-            // this.operations.push(num);
-            // this.operationsLength.push(10 * inputConstant.length);
-            // this.formulaEndPos.add(new Vec3(10 * inputConstant.length, 0, 0));
-            // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
-        // }
     }
 
     public onOperationButtonClick(e: Event, op: string) {
-        // const opNode = new Node();
-        // const opLabel = opNode.addComponent(Label);
-        // opLabel.string = op;
-        // opLabel.color.fromHEX('#000000');
-        // opLabel.fontSize = 15;
-        // opLabel.lineHeight = 15;
-        // opNode.getComponent(UITransform).anchorPoint.set(0, 0.5);
-        // opNode.layer = this.node.layer;
-        // this.editNode.addChild(opNode);
-        // opNode.setPosition(this.formulaEndPos);
 
         const opNode = new Node();
         opNode.layer = this.node.layer;
@@ -391,21 +360,6 @@ export class EditEmbeddingGraphController extends Component {
         }
         eeno.nodeName = op;
         this.editNode.addChild(opNode);
-
-        // if (op === 'max' || op === 'min') {
-        //     this.operations.push(op);
-        //     this.operationsLength.push(30);
-        //     this.formulaEndPos.add(new Vec3(30, 0, 0));
-        // } else if (op === ',') {
-        //     this.operationsLength.push(15);
-        //     this.formulaEndPos.add(new Vec3(15, 0, 0));
-        // } else {
-        //     this.operations.push(op);
-        //     this.operationsLength.push(15);
-        //     this.formulaEndPos.add(new Vec3(15, 0, 0));
-        // }
-        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
-        // console.log(this.operations);
     }
 
     public onThresholdButtonClick() {
@@ -413,14 +367,6 @@ export class EditEmbeddingGraphController extends Component {
         thNode.layer = this.node.layer;
         thNode.addComponent(EditEmbeddingNodeThreshold);
         this.editNode.addChild(thNode);
-    }
-
-    public onBackSpaceButtonClick() {
-        // this.operations.pop();
-        // this.editNode.children.pop();
-        // const offset = this.operationsLength.pop();
-        // this.formulaEndPos.subtract(new Vec3(offset, 0, 0));
-        // this.editNode.setPosition(Vec3.multiplyScalar(new Vec3, this.formulaEndPos, -0.5).add(new Vec3(0, 100, 0)));
     }
 
     private onMouseDown(e: EventMouse) {

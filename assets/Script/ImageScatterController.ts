@@ -22,17 +22,13 @@ export class ImageScatterController extends Component {
 
     }
 
-    update(deltaTime: number) {
-        
-    }
-
     public drawImageScatter() {
         this.imageNodeList = this.node.getChildByName('ImageNodes');
         const g = this.node.getChildByName('bgGraph').getComponent(Graphics);
         const sr = this.scatterController.scatterRect;
         const innerBorder = 40;
-        drawRoundRect(g, new Vec2(sr.left, sr.top), sr.right - sr.left, sr.top - sr.bottom, 10, true);
-        g.fillColor.fromHEX('#bbbbbb');
+        drawRoundRect(g, new Vec2(sr.left - 10, sr.top + 40), sr.right - sr.left + 20, sr.top - sr.bottom + 50, 10, true);
+        g.fillColor.fromHEX('#dddddd');
         g.fill();
 
         this.imageNodeList.destroyAllChildren();

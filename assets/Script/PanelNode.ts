@@ -1,4 +1,4 @@
-import { _decorator, Button, Component, director, EventHandler, Node, Sprite } from 'cc';
+import { _decorator, Button, Component, director, EventHandler, Node, Sprite, Label } from 'cc';
 import { MainController } from './Controller';
 import { QuadPanelGradient } from './QuadPanelGradient';
 const { ccclass, property } = _decorator;
@@ -9,11 +9,16 @@ export class PanelNode extends Component {
     public readonly pid: number = 0;
 
     public vid: string = '';
+    public nameLabel: Label = null;
 
-    private controller: MainController = null;
+    private quadPanelGradient: QuadPanelGradient = null;
+
+    onEnable() {
+        this.nameLabel = this.node.getChildByName('Label').getComponent(Label);
+    }
 
     start() {
-        this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
+        this.quadPanelGradient = this.node.getParent().getComponent(QuadPanelGradient);
         const button = this.node.getComponent(Button);
         button.target = this.node;
         const clickEvent = new EventHandler();
@@ -24,8 +29,6 @@ export class PanelNode extends Component {
     }
 
     private onClick() {
-        if (!this.controller)
-            this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
    
         const childList = this.node.parent.children;
         let i = this.pid + 1;
@@ -40,7 +43,8 @@ export class PanelNode extends Component {
         } 
         childList[--i].active = false;
         childList[i].getComponent(PanelNode).vid = '';
-        this.node.parent.getComponent(QuadPanelGradient).snNum -= 1;
+        if (this.quadPanelGradient.snNum-- <= 2)
+            this.node.getParent().getChildByName('select2').active = false;
     }
 }
 

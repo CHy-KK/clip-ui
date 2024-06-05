@@ -1,6 +1,6 @@
 import { _decorator, Component, director, EventKeyboard, input, Input, KeyCode, Node, EventTouch, Vec2, Graphics, Vec4, Color, Prefab, instantiate, Vec3, Label, randomRange } from 'cc';
 import { MainController } from './Controller';
-import { ClickState, DataPoint, RectSize, RequestName, SelectingType, type2Color } from './Utils/Utils';
+import { ClickState, DataPoint, drawRoundRect, RectSize, RequestName, SelectingType, type2Color } from './Utils/Utils';
 const { ccclass, property } = _decorator;
 
 @ccclass('ScatterController')
@@ -90,6 +90,7 @@ export class ScatterController extends Component {
         this.selectGraph.lineWidth = 1;
         this.selectGraph.strokeColor.fromHEX('#0099aa');
         this.selectGraph.fillColor = new Color(0, 200, 200, 80);
+        this.inistializeScatter();
     }
 
     update(deltaTime: number) {
@@ -117,13 +118,20 @@ export class ScatterController extends Component {
         return this.selectDataList[0];
     }
 
+    inistializeScatter() {
+        const g = this.node.getChildByName('bgGraph').getComponent(Graphics);
+        const sr = this.scatterRect;
+        drawRoundRect(g, new Vec2(sr.left - 10, sr.top + 40), sr.right - sr.left + 20, sr.top - sr.bottom + 50, 10, true);
+        g.fillColor.fromHEX('#dddddd');
+        g.fill();
+
+    }
+
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.CTRL_LEFT && this.clickState === ClickState.None && this.selectType != SelectingType.Single && this.selectType != SelectingType.Range) {
             // 按住左ctrl多次选点
             this.isSelectCtrl = true;
         }
-        
-
     }
 
     private keyUp(key: EventKeyboard) {
@@ -133,8 +141,9 @@ export class ScatterController extends Component {
     }
 
     private onTouchStart(e: EventTouch) {
-        const pos: Vec2 = e.touch.getUILocation();
+        const pos: Vec2 = Vec2.subtract(new Vec2(), e.touch.getUILocation(), new Vec2(this.node.worldPosition.x, this.node.worldPosition.y));
         if (pos.x > this.scatterRect.left && pos.x < this.scatterRect.right && pos.y > this.scatterRect.bottom && pos.y < this.scatterRect.top) {
+            console.log('in sacatter');
             this.clickState = ClickState.Scatter;
             pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
             this.clickPos = pos;
@@ -154,7 +163,7 @@ export class ScatterController extends Component {
     }
 
     private onTouchMove(e: EventTouch) {
-        const pos: Vec2 = e.touch.getUILocation();
+        const pos: Vec2 = Vec2.subtract(new Vec2(), e.touch.getUILocation(), new Vec2(this.node.worldPosition.x, this.node.worldPosition.y));
         this.isMove = true;
         if (this.clickState === ClickState.Scatter)
             this.selectMovingPos = pos;
@@ -163,7 +172,7 @@ export class ScatterController extends Component {
 
     private onTouchEnd(e: EventTouch) {
         if (this.clickState === ClickState.Scatter) {
-            const pos: Vec2 = e.touch.getUILocation();
+            const pos: Vec2 = Vec2.subtract(new Vec2(), e.touch.getUILocation(), new Vec2(this.node.worldPosition.x, this.node.worldPosition.y));
             if (this.isMove && !this.isSelectCtrl) {    // 框选
                 pos.subtract2f(this.scatterRect.left, this.scatterRect.bottom);
                 pos.x = Math.min(Math.max(0, pos.x), this.axisLength);
@@ -286,7 +295,7 @@ export class ScatterController extends Component {
             this.pointTree[Math.min(Math.floor(d.screenPos.x / this.tileLength), this.tileNum - 1)][Math.min(Math.floor(d.screenPos.y / this.tileLength), this.tileNum - 1)].push(d);
             
             this.scatterGraph.fillColor.fromHEX(type2Color[d.type]);
-            this.scatterGraph.circle(d.screenPos.x + renderRect.left, d.screenPos.y + renderRect.bottom, 2);
+            this.scatterGraph.circle(d.screenPos.x + renderRect.left, d.screenPos.y + renderRect.bottom, 1.5);
             this.scatterGraph.fill();
             this.scatterGraph.stroke();
         }
@@ -315,7 +324,7 @@ export class ScatterController extends Component {
             this.pointTree[Math.min(Math.floor(d.screenPos.x / this.tileLength), this.tileNum - 1)][Math.min(Math.floor(d.screenPos.y / this.tileLength), this.tileNum - 1)].push(d);
             
             this.scatterGraph.fillColor.fromHEX(type2Color[d.type]);
-            this.scatterGraph.circle(d.screenPos.x + renderRect.left, d.screenPos.y + renderRect.bottom, 2);
+            this.scatterGraph.circle(d.screenPos.x + renderRect.left, d.screenPos.y + renderRect.bottom, 1.5);
             this.scatterGraph.fill();
             this.scatterGraph.stroke();
         }
@@ -386,7 +395,7 @@ export class ScatterController extends Component {
         const data = this.controller.data;
         const dNum = Math.ceil(data.length * progress);
         this.downSampleList = new Array(dNum);
-        if (this.dataRatio != progress) {
+        if (this.dataRatio !== progress) {
             this.clearAllStates();
             this.dataRatio = progress;
             this.isSampleChange = true;

@@ -1,9 +1,9 @@
-import { _decorator, Component, CurveRange, director, EventKeyboard, EventTouch, Input, input, KeyCode, lerp, UITransform, Vec2, Vec3, Vec4, view } from 'cc';
+import { _decorator, Component, CurveRange, director, EventKeyboard, EventTouch, Input, input, KeyCode, lerp, UITransform, Vec2, Vec3, Vec4, view, Graphics } from 'cc';
 
 import { PREVIEW } from 'cc/env';
 import { MainController } from './Controller';
 import { InOrOut } from './SnapShotNode';
-import { RectSize } from './Utils/Utils';
+import { drawRoundRect, RectSize } from './Utils/Utils';
 
 
 const { ccclass, property } = _decorator;
@@ -62,12 +62,24 @@ export class MaskSlide extends Component {
         this.moveDir = this.moveDir.normalize();
         this.maskLength = Math.max(this.node.getParent().getComponent(UITransform).contentSize.x, this.node.getParent().getComponent(UITransform).contentSize.y);
         this.sliderLength = Vec2.distance(this.originPos, this.tailPos);
+        const maskWorldPos = this.node.getParent().worldPosition;
+        const maskRect = this.node.getParent().getComponent(UITransform).contentSize;
         this.maskZone = {
-            left: this.maskZoneVec.x,
-            right: this.maskZoneVec.y,
-            bottom: this.maskZoneVec.z,
-            top: this.maskZoneVec.w
+            left: maskWorldPos.x - maskRect.x,
+            right: maskWorldPos.x + maskRect.x,
+            bottom: maskWorldPos.y - maskRect.y,
+            top: maskWorldPos.y + maskRect.y
         }
+        const g = director.getScene().getChildByPath('mainUI/InnerUI/InnerHistoryGraphic').getComponent(Graphics);
+        g.lineWidth = 3;
+        g.strokeColor.fromHEX('#aaaaaa');
+        if (this.inout === InOrOut.In) {
+            drawRoundRect(g, new Vec2(-maskRect.x * 0.5 - 20, maskRect.y * 0.5), maskRect.x + 40, maskRect.y, 5, false);
+        } else {
+            // drawRoundRect(g, new Vec2(-maskRect.x, 240), 100, 570, 10, false);
+        }
+        g.stroke();
+        // console.log('mask pos' + );
     }
 
     lateUpdate(deltaTime: number) {
@@ -161,8 +173,8 @@ export class MaskSlide extends Component {
         const pos: Vec2 = e.touch.getUILocation();
         if (((this.controller?.isOutUI() ? 0 : 1) ^ this.inout) && pos.x >= this.maskZone.left && pos.x <= this.maskZone.right && pos.y >= this.maskZone.bottom && pos.y <= this.maskZone.top) {
             const childList = this.node.children;
-            const posChdHead = new Vec2(childList[childList.length - 1].position.x, childList[childList.length - 1].position.y);
-            const posChdTail = new Vec2(childList[0].position.x, childList[0].position.y);
+            const posChdHead = new Vec2(childList[childList.length - 1]?.position.x, childList[childList.length - 1]?.position.y);
+            const posChdTail = new Vec2(childList[0]?.position.x, childList[0]?.position.y);
             Vec2.subtract(this.historyListHeadToTail, posChdTail, posChdHead);
             this.isClickIn = true;
         } 

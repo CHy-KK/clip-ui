@@ -1,12 +1,17 @@
-import { Sprite, Texture2D, Vec3, Node, Label, UITransform, director, SpriteFrame, Overflow, Graphics } from "cc";
+import { Sprite, Texture2D, Vec3, Node, Label, UITransform, director, SpriteFrame, Overflow, Graphics, Color } from "cc";
 import { PREVIEW } from "cc/env";
 import { InOrOut, SnapShotNode } from "../SnapShotNode";
 
 export type VoxelRecord = {
     vid: string,
+    name: string,
     embedding: Array<number>,
     idxInData: number,
     snapShotState: boolean
+}
+
+export type IdxOutput = {
+    idx: number
 }
 
 export class VoxelHistoryQueue {
@@ -21,27 +26,31 @@ export class VoxelHistoryQueue {
     constructor(maxlength: number) {
         this.rawVoxelDataHistory = new Queue<Vec3[]>(maxlength);
         this.voxelIdxHistory = new Queue<VoxelRecord>(maxlength);
-        this.outHistoryListNode = director.getScene().getChildByPath('mainUI/OutUI/stencilMask/HistoryList');
+        this.outHistoryListNode = director.getScene().getChildByPath('mainUI/OutUI/HistoryBackgroundGraphic/stencilMask/HistoryList');
         this.innerHistoryListNode = director.getScene().getChildByPath('mainUI/InnerUI/InnerHistoryGraphic/stencilMask/HistoryList');
         this.maxLength = maxlength;
     }
 
     /**如果存在返回在数组中下标，不存在返回-1 */
-    public isExist(id: string): number {
+    public isExist(id: string, out: IdxOutput=null): boolean {
         for (let i = 0; i < this.voxelIdxHistory.length; i++) {
-            if (this.voxelIdxHistory.getElement(i).vid === id) 
-                return i;
+            console.log(this.voxelIdxHistory.getElement(i).vid);
+            if (this.voxelIdxHistory.getElement(i).vid === id) {
+                if (out)
+                    out.idx = i;
+                return true;
+            }
         }
         if(PREVIEW) {
             console.log(id + ' is not in queue now');
-            return -1;
+            return false;
         }
-        return -1;
+        return false;
     }
 
     public getVoxelById(id: string): Vec3[] {
-        const idx = this.isExist(id);
-        return idx === -1 ? null : this.rawVoxelDataHistory.getElement(idx);
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.rawVoxelDataHistory.getElement(idxOut.idx) : null;
     }
 
     // public getSnapShotReadyById(id: string): boolean {
@@ -57,7 +66,7 @@ export class VoxelHistoryQueue {
     //         return;
     //     this.voxelIdxHistory.setElement(idx, {vid: id, snapShotState: true});
     // }
-    private pushSprite(id: string) {
+    private pushSprite(id: string, name: string) {
         // 创建snapShotNode
         const spriteNodeO = new Node();
         const spriteNodeI = new Node();
@@ -85,18 +94,19 @@ export class VoxelHistoryQueue {
         idLabelI.layer = idLabelO.layer;
         const ilO = idLabelO.addComponent(Label);
         const ilI = idLabelI.addComponent(Label);
-        ilO.string = id;
-        ilI.string = id;
+        ilO.string = name;
+        ilI.string = name;
         ilO.fontSize = 15;
         ilI.fontSize = 10;
         ilO.lineHeight = 15;
         ilI.lineHeight = 10;
         ilO.overflow = Overflow.RESIZE_HEIGHT;
         ilI.overflow = Overflow.RESIZE_HEIGHT;
+        ilI.color = new Color(100, 100, 100);
         spriteNodeO.addChild(idLabelO);
         spriteNodeI.addChild(idLabelI);
         idLabelO.setPosition(new Vec3(0, 60, 0));
-        idLabelI.setPosition(new Vec3(0, 50, 0));
+        idLabelI.setPosition(new Vec3(0, 35, 0));
         idLabelO.setScale(new Vec3(1, -1, 1));
         idLabelI.setScale(new Vec3(1, -1, 1));
 
@@ -106,11 +116,11 @@ export class VoxelHistoryQueue {
         const g = graphicNode.addComponent(Graphics);
         g.strokeColor.fromHEX('#33ffff');
         g.lineWidth = 2;
-        g.moveTo(-43, 43);
-        g.lineTo(43, 43);
-        g.lineTo(43, -43);
-        g.lineTo(-43, -43);
-        g.lineTo(-43, 43);
+        g.moveTo(-25, 25);
+        g.lineTo(25, 25);
+        g.lineTo(25, -25);
+        g.lineTo(-25, -25);
+        g.lineTo(-25, 25);
         g.stroke();
         graphicNode.layer = spriteNodeI.layer;
         graphicNode.active = false;
@@ -119,29 +129,29 @@ export class VoxelHistoryQueue {
         
         this.outHistoryListNode.addChild(spriteNodeO);
         this.innerHistoryListNode.addChild(spriteNodeI);
-        let xpos = 0;   
-        let ypos = 0;
+        let xposO = 0;   
+        let xposI = 0;
         const childListO = this.outHistoryListNode.children;
         const childListI = this.innerHistoryListNode.children;
-        for (let i = childListO.length - 1; i >= 0; i--, xpos -= 120, ypos -= 110) {
-            childListO[i].position = new Vec3(xpos, 15, 0);
-            childListI[i].position = new Vec3(0, ypos, 0);
+        for (let i = childListO.length - 1; i >= 0; i--, xposO -= 120, xposI -= 60) {
+            childListO[i].position = new Vec3(xposO, 15, 0);
+            childListI[i].position = new Vec3(xposI, 10, 0);
         }
         this.outHistoryListNode.setPosition(new Vec3(440, 0, 0));
-        this.innerHistoryListNode.setPosition(new Vec3(0, 215, 0));
+        this.innerHistoryListNode.setPosition(new Vec3(190, 0, 0));
     }
 
     /**
      * @param idx: 标识获取体素在服务器data中的下标，如果是自定义体素则-1
      * @param sss: 当前是否获取snapshot
      */
-    public push(voxel: Vec3[], id: string, emb: number[], idx: number, sss: boolean = false): boolean {
-        if (this.isExist(id) != -1)
+    public push(voxel: Vec3[], id: string, name: string, emb: number[], idx: number, sss: boolean = false): boolean {
+        if (this.isExist(id))
             return true;
         
-        if (this.voxelIdxHistory.push({ vid: id, embedding: emb, idxInData: idx, snapShotState: sss })) {
+        if (this.voxelIdxHistory.push({ vid: id, name: name, embedding: emb, idxInData: idx, snapShotState: sss })) {
             this.rawVoxelDataHistory.push(voxel);
-            this.pushSprite(id);
+            this.pushSprite(id, name);
             return true;
         }
         return false;
@@ -153,23 +163,27 @@ export class VoxelHistoryQueue {
         childListO[childListO.length - 1].getComponent(UITransform).contentSize.set(100, 100);
         const childListI = this.innerHistoryListNode.children;
         childListI[childListI.length - 1].getComponent(Sprite).spriteFrame = sf;
-        childListI[childListI.length - 1].getComponent(UITransform).contentSize.set(80, 80);
+        childListI[childListI.length - 1].getComponent(UITransform).contentSize.set(50, 50);
     }
 
     public getSnapShotById(id: string) {
-        const idx = this.isExist(id);
-        return this.outHistoryListNode.children[idx].getComponent(Sprite).spriteFrame;
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.outHistoryListNode.children[idxOut.idx].getComponent(Sprite).spriteFrame : null;
     }
 
     public getIdxInDataById(id: string): number {
-        const idx = this.isExist(id);
-        console.log('in history? ' + idx);
-        return this.voxelIdxHistory.getElement(idx).idxInData;
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.voxelIdxHistory.getElement(idxOut.idx).idxInData : null;
     }
 
     public getEmbById(id: string): number[] {
-        const idx = this.isExist(id);
-        return idx === -1 ? null : this.voxelIdxHistory.getElement(idx).embedding;
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.voxelIdxHistory.getElement(idxOut.idx).embedding : null;
+    }
+
+    public getNameById(id: string) {
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.voxelIdxHistory.getElement(idxOut.idx).name : null;
     }
 
     public popHead() {
@@ -203,7 +217,7 @@ export class VoxelHistoryQueue {
         return this.rawVoxelDataHistory.length;
     }
 
-    /**单次点击显示蓝色框，黄色多选框必须手动取消，且最大选中两个*/  
+    /**单次点击显示蓝色框*/  
     public showSnapSelect(snode: Node) {
         snode.getChildByName('blueBorder').active = true;
         
@@ -242,7 +256,7 @@ export class VoxelHistoryQueue {
     }
 
     public cancelSelect(id: string) {
-        if (this.isExist(id) === -1)
+        if (!this.isExist(id))
             return;
         this.innerHistoryListNode.getChildByPath(id + '/blueBorder').active = false;
     }
