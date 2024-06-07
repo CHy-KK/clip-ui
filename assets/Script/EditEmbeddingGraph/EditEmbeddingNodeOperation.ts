@@ -120,9 +120,7 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
             return false;
         if (this.inputFrom1 && this.inputFrom2)
             this.calculateNode();
-        else {
-
-        }
+  
         return true;
     }
 
@@ -135,6 +133,8 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         const originVal = this.value;
         const eenb1 = this.inputFrom1.getParent().getParent().getComponent(EditEmbeddingNodeBase);
         const eenb2 = this.inputFrom2.getParent().getParent().getComponent(EditEmbeddingNodeBase);
+        console.log(eenb1.value);
+        console.log(eenb2.value);
         switch (this.nodeType) {
             case EditEmbeddingNodeType.Add:
                 if (eenb1.outputType === EditEmbeddingOutputType.Number) {
@@ -246,6 +246,7 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
             this.numLabel.string = this.value;
         }
 
+        console.log(this.value);
         if (originVal !== this.value) {
             this.outputTo?.getParent().getParent().getComponent(EditEmbeddingNodeBase).changeInputValue(this.outputNode);
         }
@@ -271,6 +272,11 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         this.numLabel.string = '';
     }
 
+    public setClick() {
+        if (this.outputType === EditEmbeddingOutputType.Voxel) {
+            this.EEGController.drawDetailInfoNode(this.value);
+        }
+    }
 }
 
 

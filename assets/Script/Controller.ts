@@ -240,8 +240,8 @@ export class MainController extends Component {
                         }   
                         
                         this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                        this.onVoxelSelect(fileName, true);
-                        this.drawDetailInfoNode(emb);
+                        this.onVoxelSelect(id, true);
+                        // this.drawDetailInfoNode(emb);
                     // } catch (e) {
                     //     console.error('传送图片获取体素失败');
                     // }
@@ -306,11 +306,15 @@ export class MainController extends Component {
 
         this.drawContainerBg();
         this.DivideLineGraphic.strokeColor.fromHEX('#eeeeee');
-        this.DivideLineGraphic.lineWidth = 3;
+        this.DivideLineGraphic.lineWidth = 2;
         this.DivideLineGraphic.moveTo(530, 720);
         this.DivideLineGraphic.lineTo(530, 0);
         this.DivideLineGraphic.moveTo(530, 320);
         this.DivideLineGraphic.lineTo(1280, 320);
+        this.DivideLineGraphic.moveTo(790, 320);
+        this.DivideLineGraphic.lineTo(790, 0);
+
+        
         this.DivideLineGraphic.stroke();
 
     }
@@ -746,7 +750,7 @@ export class MainController extends Component {
     // id用来唯一标识这个体素
     // 调用此接口时思考一下id查重的问题
     // TODO：这里改成传回embedding，embedding在history里保存了，这样可以避免选的是自己生成的点
-    private getVoxelFromServer(name: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
+    private getVoxelFromServer(id: string, idx0: number, idx1: number = -1, idx2: number = -1, idx3: number = -1, xval: number = 0, yval: number = 0) {
         let xhr = new XMLHttpRequest();
 
         let url = SERVER_HOST + RequestName.GetVoxel + `/${idx0}-${idx1}-${idx2}-${idx3}/${xval.toFixed(3)}-${yval.toFixed(3)}`;
@@ -776,15 +780,14 @@ export class MainController extends Component {
   
                 // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
                 // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-                const id = `create-${this.createNum++}`;
-                if (!this.voxelDataHistory.push(voxelData, id, name, emb, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
+
+                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, name, emb, idx1 === -1 ? idx0 : -1);
+                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, idx1 === -1 ? idx0 : -1);
                 }   
                 
                 this.isGetVoxelFinished = true;
                 this.node.emit(GET_VOXEL_FINISH_EVENT);
-                // this.drawDetailInfoNode(emb);
             }  
         };  
 
@@ -810,7 +813,6 @@ export class MainController extends Component {
                 }
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                 this.onVoxelSelect(id, true);
-                this.drawDetailInfoNode(emb);
             }  
         };
         xhr.send(formData);
@@ -818,14 +820,13 @@ export class MainController extends Component {
 
     public async onSingleGetVoxelButtonClick() {
         // TODO:这里的id最好还是用数据点的name
-        const id = this.scatterController.getSelectListHead();
+        const id = this.scatterController.getSelectListHead();     
         const needSnapShot = !this.voxelDataHistory.isExist(id.toString());
         if (needSnapShot) {
             this.getVoxelFromServer(id.toString(), id);
             await this.waitUntilGetVoxelFnish();
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
-        this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id.toString()));
         this.onVoxelSelect(id.toString(), needSnapShot);
     }
 
@@ -864,7 +865,6 @@ export class MainController extends Component {
                 
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                 this.onVoxelSelect(id, true);
-                this.drawDetailInfoNode(msg.emb);
             }  
         };  
         xhr.send(formData);  
@@ -910,8 +910,7 @@ export class MainController extends Component {
                 }   
                 
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
-                this.onVoxelSelect(fileName, true);
-                this.drawDetailInfoNode(emb);
+                this.onVoxelSelect(id, true);
             }  
         };  
         xhr.send(formData);  
@@ -965,14 +964,12 @@ export class MainController extends Component {
             + (idxList[2] === -1 ? '' : (this.data[idxList[2]].name + '-')) 
             + (idxList[3] === -1 ? '' : (this.data[idxList[3]].name + '-')) 
             + this.panelClickPos.x.toString() + '-' + this.panelClickPos.y.toString();
-        
         const needSnapShot = !this.voxelDataHistory.isExist(id);
         if (needSnapShot) {
             this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);
             await this.waitUntilGetVoxelFnish();
             this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
         }
-        this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(id));
         this.onVoxelSelect(id, needSnapShot);
     }
 
@@ -1050,70 +1047,7 @@ export class MainController extends Component {
     }
 
 
-    // TODO: 改成只有在edit graph里面选中的点才展示embedding，可以直接把该函数放到那个类里
-    public drawDetailInfoNode(emb: number[]) {
-        this.detailInfoNode.destroyAllChildren();
-        const diGraph = this.detailInfoNode.getComponent(Graphics);
-        diGraph.clear();
-        if (!emb) 
-            return;
-        // 绘制该体素向量详细信息
-        const embLen = emb.length;
-        diGraph.lineWidth = 360 / embLen;
-        let minVal = -0.000001;
-        let maxVal = 0.000001;
-        for (let i = 0; i < embLen; i++) {
-            minVal = Math.min(emb[i], minVal);
-            maxVal = Math.max(emb[i], maxVal);
-        }
-        minVal = -minVal;
-        for (let i = 0, y = -20 - diGraph.lineWidth * 0.5; i < embLen; i++, y -= diGraph.lineWidth) {
-            diGraph.strokeColor = new Color(lerp(255, 0, 1 - (Math.max(0, -emb[i]) / minVal)), 120, lerp(0, 255, Math.max(0, emb[i]) / maxVal));
-            diGraph.moveTo(100, y);
-            diGraph.lineTo(100 + 80 * (emb[i] / (emb[i] > 0 ? maxVal : minVal)), y);
-            diGraph.stroke();
-        }
-        diGraph.lineWidth = 2;
-        diGraph.strokeColor.fromHEX('#555555');
-        diGraph.moveTo(100, -10);
-        diGraph.lineTo(100, -390);
-        diGraph.stroke();
-        diGraph.rect(17, -390, 6, 6);
-        diGraph.fillColor = new Color(255, 170, 0);
-        diGraph.fill();
-        diGraph.rect(177, -390, 6, 6);
-        diGraph.fillColor = new Color(0, 170, 255);
-        diGraph.fill();
-        const embDimLabelNode = new Node();
-        const embDimLabel = embDimLabelNode.addComponent(Label);
-        embDimLabel.string = embLen.toString();
-        embDimLabel.color.fromHEX('#333333');
-        embDimLabel.fontSize = 10;
-        embDimLabel.isItalic = true;
-        this.detailInfoNode.addChild(embDimLabelNode);
-        embDimLabelNode.setPosition(100, -395);
-        embDimLabelNode.layer = this.detailInfoNode.layer;
-
-        const minValLabelN = new Node();
-        const minValLabel = minValLabelN.addComponent(Label);
-        minValLabel.string = (-minVal).toFixed(2);
-        minValLabel.color.fromHEX('#333333');
-        minValLabel.fontSize = 10;
-        minValLabel.isItalic = true;
-        this.detailInfoNode.addChild(minValLabelN);
-        minValLabelN.setPosition(17, -395);
-        minValLabelN.layer = this.detailInfoNode.layer;
-
-        const maxValLabelN = new Node();
-        const maxValLabel = maxValLabelN.addComponent(Label);
-        maxValLabel.string = maxVal.toFixed(2);
-        maxValLabel.color.fromHEX('#333333');
-        maxValLabel.fontSize = 10;
-        maxValLabel.isItalic = true;
-        this.detailInfoNode.addChild(maxValLabelN);
-        maxValLabelN.setPosition(177, -395);
-        maxValLabelN.layer = this.detailInfoNode.layer;
-    }
+    
 
     private drawDetailInfoContour() {
         this.detailInfoNode.destroyAllChildren();
@@ -1159,14 +1093,14 @@ export class MainController extends Component {
 
     public onDetailInfoSelectClick(e: Event, customEventData: string) {
         console.log(customEventData);
-        switch(customEventData) {
-            case 'node':
-                this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(this.curSelectVoxelId));
-                break;
-            case 'contour':
-                this.drawDetailInfoContour();
-                break;
-        }
+        // switch(customEventData) {
+        //     case 'node':
+        //         this.drawDetailInfoNode(this.voxelDataHistory.getEmbById(this.curSelectVoxelId));
+        //         break;
+        //     case 'contour':
+        //         this.drawDetailInfoContour();
+        //         break;
+        // }
     }
 
     public onSwitchScatterorImageButtonClick() {

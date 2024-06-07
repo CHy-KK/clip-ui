@@ -175,6 +175,11 @@ export class EditEmbeddingNodeBase extends Component {
             this.isInputChange = true;
         }
     }
+
+    /**virtual func */
+    public setClick() {
+
+    }
 }
 
 export type OutInfo = {

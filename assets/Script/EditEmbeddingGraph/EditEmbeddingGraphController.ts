@@ -1,4 +1,4 @@
-import { _decorator, assert, Color, Component, director, error, EventMouse, EventTouch, Graphics, Input, input, Label, Node, Prefab, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec2, Vec3 } from 'cc';
+import { _decorator, assert, Color, Component, director, error, EventMouse, EventTouch, Graphics, Input, input, Label, Node, Prefab, SpringJoint2D, Sprite, SpriteFrame, UITransform, Vec2, Vec3, lerp } from 'cc';
 import { MainController } from '../Controller';
 import { EditEmbeddingNodeOperation } from './EditEmbeddingNodeOperation';
 import { EditEmbeddingNodeVoxel } from './EditEmbeddingNodeVoxel';
@@ -57,6 +57,7 @@ export class EditEmbeddingGraphController extends Component {
     private isDragNode: boolean = false;
     private dragOffset: Vec2 = new Vec2();
     private draggingNode: Node = null;
+    private detailInfoNode: Node = null;
 
     protected onEnable(): void {
         input.on(Input.EventType.MOUSE_DOWN, this.onMouseDown, this);
@@ -110,6 +111,42 @@ export class EditEmbeddingGraphController extends Component {
         buttonBgGraph.lineWidth = 3;
         drawRect(buttonBgGraph, new Vec2(-275, -182), 550, 60);
         buttonBgGraph.stroke();
+
+        this.detailInfoNode = this.node.getChildByName('detailInfoGraph');
+        const halfGraphWidth = this.detailInfoNode.getComponent(UITransform).contentSize.x * 0.5;
+        const halfGraphHeight = this.detailInfoNode.getComponent(UITransform).contentSize.y * 0.5;
+        const embDimLabelNode = new Node();
+        embDimLabelNode.name = 'embDimLabelNode';
+        const embDimLabel = embDimLabelNode.addComponent(Label);
+        embDimLabel.color.fromHEX('#333333');
+        embDimLabel.fontSize = 8;
+        embDimLabel.isItalic = true;
+        this.detailInfoNode.addChild(embDimLabelNode);
+        embDimLabelNode.setPosition(0, -halfGraphHeight);
+        embDimLabelNode.layer = this.detailInfoNode.layer;
+
+        const minValLabelN = new Node();
+        minValLabelN.name = 'minValLabelN';
+        const minValLabel = minValLabelN.addComponent(Label);
+        minValLabelN.getComponent(UITransform).setAnchorPoint(0, 0.5);
+        minValLabel.color.fromHEX('#333333');
+        minValLabel.fontSize = 8;
+        minValLabel.isItalic = true;
+        this.detailInfoNode.addChild(minValLabelN);
+        minValLabelN.setPosition(10 - halfGraphWidth, -halfGraphHeight);
+        minValLabelN.layer = this.detailInfoNode.layer;
+
+        const maxValLabelN = new Node();
+        maxValLabelN.name = 'maxValLabelN';
+        const maxValLabel = maxValLabelN.addComponent(Label);
+        maxValLabelN.getComponent(UITransform).setAnchorPoint(1, 0.5);
+        maxValLabel.color.fromHEX('#333333');
+        maxValLabel.fontSize = 8;
+        maxValLabel.isItalic = true;
+        this.detailInfoNode.addChild(maxValLabelN);
+        maxValLabelN.setPosition(halfGraphWidth - 5, -halfGraphHeight);
+        maxValLabelN.layer = this.detailInfoNode.layer;
+        
     }
 
     private calculateOps(op: string) {
@@ -317,7 +354,7 @@ export class EditEmbeddingGraphController extends Component {
         this.operations.shift();
         this.operations.pop();
         if (res)
-            this.controller.drawDetailInfoNode(res);
+            this.drawDetailInfoNode(res);
     }
 
     public addSnapShotToEdit() {
@@ -394,6 +431,7 @@ export class EditEmbeddingGraphController extends Component {
                         this.draggingNode = childList[i];
                         this.editNode.removeChild(this.draggingNode);
                         this.editNode.addChild(this.draggingNode);
+                        een.setClick();
                     }
                     break;
                 }
@@ -488,6 +526,57 @@ export class EditEmbeddingGraphController extends Component {
         this.isDragNode = false;
         this.isConnecting = false;
         this.draggingNode = null;
+    }
+
+    // TODO: 改成只有在edit graph里面选中的点才展示embedding，可以直接把该函数放到那个类里
+    public drawDetailInfoNode(emb: number[]) {
+        const halfGraphWidth = this.detailInfoNode.getComponent(UITransform).contentSize.x * 0.5;
+        const halfGraphHeight = this.detailInfoNode.getComponent(UITransform).contentSize.y * 0.5;
+        const diGraph = this.detailInfoNode.getComponent(Graphics);
+        diGraph.clear();
+        console.log(halfGraphHeight);
+        console.log(halfGraphHeight);
+        console.log(halfGraphHeight);
+        console.log(halfGraphHeight);
+        console.log(halfGraphHeight);
+        if (!emb) 
+            return;
+        // 绘制该体素向量详细信息
+        const embLen = emb.length;
+        diGraph.lineWidth = (halfGraphHeight * 2 - 20) / embLen;
+        let minVal = -0.000001;
+        let maxVal = 0.000001;
+        for (let i = 0; i < embLen; i++) {
+            minVal = Math.min(emb[i], minVal);
+            maxVal = Math.max(emb[i], maxVal);
+        }
+        minVal = -minVal;
+        for (let i = 0, y = halfGraphHeight - 3; i < embLen; i++, y -= diGraph.lineWidth) {
+            diGraph.strokeColor = new Color(lerp(255, 0, 1 - (Math.max(0, -emb[i]) / minVal)), 120, lerp(0, 255, Math.max(0, emb[i]) / maxVal));
+            diGraph.moveTo(0, y);
+            diGraph.lineTo(0 + halfGraphWidth * (emb[i] / (emb[i] > 0 ? maxVal : minVal)), y);
+            diGraph.stroke();
+        }
+        diGraph.lineWidth = 2;
+        diGraph.strokeColor.fromHEX('#555555');
+        diGraph.moveTo(0, halfGraphHeight);
+        diGraph.lineTo(0, -halfGraphHeight);
+        diGraph.stroke();
+        diGraph.rect(-halfGraphWidth, -halfGraphHeight, 6, 6);
+        diGraph.fillColor = new Color(255, 170, 0);
+        diGraph.fill();
+        diGraph.rect(halfGraphWidth, -halfGraphHeight, 6, 6);
+        diGraph.fillColor = new Color(0, 170, 255);
+        diGraph.fill();
+        
+        this.detailInfoNode.getChildByName('embDimLabelNode').getComponent(Label).string = embLen.toString();
+        this.detailInfoNode.getChildByName('minValLabelN').getComponent(Label).string = (-minVal).toFixed(2);
+        this.detailInfoNode.getChildByName('maxValLabelN').getComponent(Label).string = maxVal.toFixed(2);
+           
+        console.log(this.detailInfoNode.getChildByName('embDimLabelNode').getComponent(Label).string);
+        console.log(this.detailInfoNode.getChildByName('minValLabelN').getComponent(Label).string);
+        console.log(this.detailInfoNode.getChildByName('maxValLabelN').getComponent(Label).string);
+
     }
 
 }

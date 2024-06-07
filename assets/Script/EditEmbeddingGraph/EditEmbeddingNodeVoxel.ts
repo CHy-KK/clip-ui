@@ -124,4 +124,8 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
         sp.spriteFrame = spf;
         this.spNode.getComponent(UITransform).contentSize.set(64, 64);
     }
+
+    public override setClick() {
+        this.EEGController.drawDetailInfoNode(this.value);
+    }
 }
