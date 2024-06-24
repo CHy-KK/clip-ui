@@ -34,15 +34,15 @@ class VoxelData {
     private data: Array<Node> = new Array();
 
     constructor() {
-        this.data = new Array(64 * 64 * 64);
+        this.data = new Array(32 * 32 * 32);
     }
 
     public getData(x: number, y: number, z: number) {
-        return this.data[(x + 32) * 4096 + (y + 32) * 64 + (z + 32)];
+        return this.data[(x + 16) * 4096 + (y + 16) * 32 + (z + 16)];
     }
 
     public setData(x: number, y: number, z: number, val: Node) {
-        this.data[(x + 32) * 4096 + (y + 32) * 64 + (z + 32)] = val;
+        this.data[(x + 16) * 4096 + (y + 16) * 32 + (z + 16)] = val;
     }
 
     public clear() {
@@ -91,8 +91,6 @@ export class EditVoxel extends Component {
     private voxelRead: HTMLInputElement = null;
     private voxelDownLoadLink: HTMLAnchorElement = null;
     private opTipLabel: Label = null;
-    /**记录当前上传体素数量，用于标识体素id */
-    private uploadNum: number = 0;
 
     /**
      * 记录本次选中体素信息
@@ -161,6 +159,7 @@ export class EditVoxel extends Component {
     }
     
     start() {
+        this.node.setWorldScale(100, 100, 100);
         this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
         this.selectGraph = this.SelectGraphic.getComponent(Graphics);
         this.selectGraph.lineWidth = 1;
@@ -251,7 +250,7 @@ export class EditVoxel extends Component {
         for (let i = 0; i < childList.length; i++) {
             voxelData.push(childList[i].position);
         }
-        this.controller.uploadVoxelToServer(voxelData, `Edit-${this.uploadNum++}`);
+        this.controller.uploadVoxelToServer(voxelData);
     }
 
     public renderEditVoxel(voxelData: Vec3[]) {
@@ -276,6 +275,7 @@ export class EditVoxel extends Component {
             const ev = childList[i];
             ev.position = new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z);
             ev.active = true;
+            ev.setScale(1,1,1);
             this.voxelPosQuery.setData(voxelData[i].x, voxelData[i].y, voxelData[i].z, ev);
         }
         this.activeEditVoxelNum = i;
@@ -337,7 +337,6 @@ export class EditVoxel extends Component {
                             this.selectInfo.selectZ = res.worldPosition.z; 
                             this.addInfo.castVoxelPos = res.worldPosition;
                             this.addInfo.startVoxel = res.position;
-                            3
                             // 计算本次点击是在体素的哪个面
                             this.node.inverseTransformPoint(this.addInfo.castVoxelFace, PhysicsSystem.instance.raycastClosestResult.hitPoint);
                             this.addInfo.castVoxelFace.subtract(res.position);
@@ -528,6 +527,7 @@ export class EditVoxel extends Component {
                                 }
                                 const ev = childList[this.activeEditVoxelNum++];
                                 ev.active = true;
+                                ev.setScale(1,1,1);
                                 ev.setPosition(Vec3.add(new Vec3(), this.addInfo.startVoxel, Vec3.multiplyScalar(new Vec3(), this.addInfo.castVoxelFace, posArray.length + 1)));
                                 const mr = (ev.getComponent(MeshRenderer) as RenderableComponent);
                                 mr.setMaterialInstance(this.addVoxelMat, 0);
@@ -561,6 +561,7 @@ export class EditVoxel extends Component {
                                     throw new Error('EDIT记录的体素数量超过实际子节点体素数量！！');
                                 }
                                 const ev = childList[this.activeEditVoxelNum++];
+                                ev.setScale(1,1,1);
                                 ev.active = true;
                                 ev.setPosition(Vec3.add(new Vec3(), this.addInfo.startVoxel, Vec3.multiplyScalar(new Vec3(), this.addInfo.castVoxelFace, -(negArray.length + 1))));
                                 const mr = (ev.getComponent(MeshRenderer) as RenderableComponent);
@@ -704,6 +705,7 @@ export class EditVoxel extends Component {
                                 }
                                 const ev = childList[this.activeEditVoxelNum++];
                                 ev.position = chd.position;
+                                ev.setScale(1,1,1);
                                 ev.active = true;
                             });
                             let i = this.activeEditVoxelNum;
@@ -745,6 +747,7 @@ export class EditVoxel extends Component {
                                 const ev = childList[this.activeEditVoxelNum++];
                                 ev.setPosition(new Vec3(chd.position.x, chd.position.y, chd.position.z));
                                 ev.active = true;
+                                ev.setScale(1,1,1);
                                 this.voxelPosQuery.setData(ev.position.x, ev.position.y, ev.position.z, ev);
                             }
                         });

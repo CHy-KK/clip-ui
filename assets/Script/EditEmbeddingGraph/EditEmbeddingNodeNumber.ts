@@ -35,7 +35,7 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.nameLabel.setPosition(0, 15);
         this.nameLabel.getComponent(Label).string = 'Constant';
         this.outputType = EditEmbeddingOutputType.Number;
-        this.outputNode.getChildByName('outputType').getComponent(Label).string = 'Constant';
+        this.outputNode.getChildByName('outputType').getComponent(Label).string = this.outputType;
       
         /**input bg */
         this.backgroundGraphic.moveTo(-32, 0);

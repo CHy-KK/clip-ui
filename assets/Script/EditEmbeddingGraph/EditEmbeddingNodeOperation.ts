@@ -94,6 +94,9 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
         // if (!thisEENB.cancelConnectOuput())
         //     return false;
         const otherType = otherFrom?.getParent().getParent().getComponent(EditEmbeddingNodeBase).outputType;
+        if ((thisEENB.outputType === EditEmbeddingOutputType.ClipEmbedding && otherType === EditEmbeddingOutputType.VoxelEmbedding) ||
+            (thisEENB.outputType === EditEmbeddingOutputType.VoxelEmbedding && otherType === EditEmbeddingOutputType.ClipEmbedding))
+            return false;
         if (!otherFrom
             || (thisEENB.outputType !== otherType && (this.nodeType & EENTypeWithDiffOperand)) 
             || (thisEENB.outputType === otherType && this.nodeType !== EditEmbeddingNodeType.BiDirAdd)
@@ -142,53 +145,56 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
                         this.value = eenb1.value + eenb2.value;
                         this.outputType = EditEmbeddingOutputType.Number;
                     } else {
-                        this.value = new Array(128);
-                        for (let i = 0; i < 128; i++)
+                        const embLen = eenb2.value.length;
+                        this.value = new Array(embLen);
+                        for (let i = 0; i < embLen; i++)
                             this.value[i] = eenb1.value + eenb2.value[i];
-                        this.outputType = EditEmbeddingOutputType.Voxel;
+                        this.outputType = eenb2.outputType;
                     }
                 } else {
-                    this.value = new Array(128);
+                    const embLen = eenb1.value.length;
+                    this.value = new Array(embLen);
                     if (eenb2.outputType === EditEmbeddingOutputType.Number) {
-                        for (let i = 0; i < 128; i++)
+                        for (let i = 0; i < embLen; i++)
                             this.value[i] = eenb1.value[i] + eenb2.value;
-                        this.outputType = EditEmbeddingOutputType.Voxel;
                     } else {
-                        for (let i = 0; i < 128; i++)
+                        for (let i = 0; i < embLen; i++)
                             this.value[i] = eenb1.value[i] + eenb2.value[i];
-                        this.outputType = EditEmbeddingOutputType.Voxel;
                     }
+                    this.outputType = eenb1.outputType;
                 }
                 break;
 
 
             case EditEmbeddingNodeType.BiDirAdd:
-                this.value = new Array(128);
                 if (eenb1.outputType === EditEmbeddingOutputType.Number) {
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb2.value.length);
+                    for (let i = 0; i < eenb2.value.length; i++)
                         this.value[i] = eenb1.value * Math.sign(eenb2.value[i]) + eenb2.value[i];
+                    this.outputType = eenb2.outputType;
                 } else {
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb1.value.length);
+                    for (let i = 0; i < eenb1.value.length; i++)
                         this.value[i] = eenb1.value[i] + eenb2.value * Math.sign(eenb1.value[i]);
+                    this.outputType = eenb1.outputType;
                     
                 }
-                this.outputType = EditEmbeddingOutputType.Voxel;
                 break;
 
             case EditEmbeddingNodeType.Multiply:
                 if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     this.value = eenb1.value * eenb2.value;
                     this.outputType = EditEmbeddingOutputType.Number;
-                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Voxel) {
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && (eenb2.outputType === EditEmbeddingOutputType.VoxelEmbedding || eenb2.outputType === EditEmbeddingOutputType.ClipEmbedding)) {
+                    this.value = new Array(eenb2.value.length);
+                    for (let i = 0; i < eenb2.value.length; i++)
                         this.value[i] = eenb1.value * eenb2.value[i];
-                    this.outputType = EditEmbeddingOutputType.Voxel;
-                } else if (eenb1.outputType === EditEmbeddingOutputType.Voxel && eenb2.outputType === EditEmbeddingOutputType.Number) {
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                    this.outputType = eenb2.outputType;
+                } else if ((eenb1.outputType === EditEmbeddingOutputType.VoxelEmbedding || eenb1.outputType === EditEmbeddingOutputType.ClipEmbedding) && eenb2.outputType === EditEmbeddingOutputType.Number) {
+                    this.value = new Array(eenb1.value.length);
+                    for (let i = 0; i < eenb1.value.length; i++)
                         this.value[i] = eenb2.value * eenb1.value[i];
-                    this.outputType = EditEmbeddingOutputType.Voxel;
+                    this.outputType = eenb1.outputType;
                 }
                 break;
 
@@ -198,20 +204,20 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
                         return;
                     this.value = eenb1.value / eenb2.value;
                     this.outputType = EditEmbeddingOutputType.Number;
-                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && eenb2.outputType === EditEmbeddingOutputType.Voxel) {
+                } else if (eenb1.outputType === EditEmbeddingOutputType.Number && (eenb2.outputType === EditEmbeddingOutputType.VoxelEmbedding || eenb2.outputType === EditEmbeddingOutputType.ClipEmbedding)) {
                     if (eenb1.value === 0)
                         return;
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb2.value.length);
+                    for (let i = 0; i < eenb2.value.length; i++)
                         this.value[i] = eenb1.value / (eenb2.value[i] === 0 ? 0.01 : eenb2.value[i]);
-                    this.outputType = EditEmbeddingOutputType.Voxel;
-                } else if (eenb1.outputType === EditEmbeddingOutputType.Voxel && eenb2.outputType === EditEmbeddingOutputType.Number) {
+                        this.outputType = eenb2.outputType;
+                } else if ((eenb1.outputType === EditEmbeddingOutputType.VoxelEmbedding || eenb1.outputType === EditEmbeddingOutputType.ClipEmbedding) && eenb2.outputType === EditEmbeddingOutputType.Number) {
                     if (eenb2.value === 0)
                         return;
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb1.value.length);
+                    for (let i = 0; i < eenb1.value.length; i++)
                         this.value[i] = eenb1.value[i] / (eenb2.value === 0 ? 0.01 : eenb2.value);
-                    this.outputType = EditEmbeddingOutputType.Voxel;
+                        this.outputType = eenb1.outputType;
                 }
                 break;
 
@@ -220,10 +226,10 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
                     this.value = Math.max(eenb1.value, eenb2.value);
                     this.outputType = EditEmbeddingOutputType.Number;
                 } else {
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb2.value.length);
+                    for (let i = 0; i < eenb2.value.length; i++)
                         this.value[i] = Math.abs(eenb1.value[i]) > Math.abs(eenb2.value[i]) ? eenb1.value[i] : eenb2.value[i];
-                    this.outputType = EditEmbeddingOutputType.Voxel;
+                    this.outputType = eenb1.outputType;
                 }
                 break;
 
@@ -232,15 +238,13 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
                     this.value = Math.min(eenb1.value, eenb2.value);
                     this.outputType = EditEmbeddingOutputType.Number;
                 } else {
-                    this.value = new Array(128);
-                    for (let i = 0; i < 128; i++)
+                    this.value = new Array(eenb2.value.length);
+                    for (let i = 0; i < eenb2.value.length; i++)
                         this.value[i] = Math.abs(eenb1.value[i]) < Math.abs(eenb2.value[i]) ? eenb1.value[i] : eenb2.value[i];
-                    this.outputType = EditEmbeddingOutputType.Voxel;
+                    this.outputType = eenb1.outputType;
                 }
                 break;
         }
-
-        this.outputNode.getChildByName('outputType').getComponent(Label).string = this.outputType;
 
         if (this.outputType === EditEmbeddingOutputType.Number) {
             this.numLabel.string = this.value;
@@ -265,15 +269,14 @@ export class EditEmbeddingNodeOperation extends EditEmbeddingNodeBase {
     }
 
     public setOutputLabel() {
-        if (!this.inputFrom1 && !this.inputFrom2) {
-            this.outputNode.getChildByName('outputType').getComponent(Label).string = '';
+        if (!this.inputFrom1 && !this.inputFrom2) 
             this.outputType = EditEmbeddingOutputType.None;
-        }
+        
         this.numLabel.string = '';
     }
 
     public setClick() {
-        if (this.outputType === EditEmbeddingOutputType.Voxel) {
+        if (this.outputType === EditEmbeddingOutputType.VoxelEmbedding || this.outputType === EditEmbeddingOutputType.ClipEmbedding) {
             this.EEGController.drawDetailInfoNode(this.value);
         }
     }

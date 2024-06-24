@@ -37,10 +37,9 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(-32, 50);
         this.backgroundGraphic.fill();
         this.nameLabel.setPosition(0, 50);
-        this.nameLabel.getComponent(Label).string = 'Voxel';
+        this.nameLabel.getComponent(Label).string = 'Voxel Node';
         this.nodeType = EditEmbeddingNodeType.Voxel;
-        this.outputType = EditEmbeddingOutputType.Voxel;
-        this.outputNode.getChildByName('outputType').getComponent(Label).string = 'Voxel';
+        this.outputNode.getChildByName('outputType').getComponent(Label).string = this.outputType;
 
         /**input bg */
         this.backgroundGraphic.moveTo(-32, 35);
@@ -68,7 +67,8 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
             const newFromVal = this.inputFrom1.getParent().getParent().getComponent(EditEmbeddingNodeBase).value;
             if (this.value !== newFromVal) {
                 this.value = newFromVal;
-                this.EEGController.controller.node.emit(GET_VOXEL_FOR_EEGRAPH, { emb: this.value, eenv: this});
+                /**@TODO 这里的feature后面需要根据情况填入，如果feature */
+                this.EEGController.controller.node.emit(GET_VOXEL_FOR_EEGRAPH, { emb: this.value, eenv: this, feature: null});
                 this.outputTo?.getParent().getParent().getComponent(EditEmbeddingNodeBase).changeInputValue(this.outputNode);
             }
             this.isInputChange = false;
@@ -76,9 +76,11 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
     }
 
     /**外部设置embedding只允许第一次创建时设置 */
-    public setEmbd(emb: number[]) {
-        if (!this.value)
+    public setEmbd(emb: number[], embType: EditEmbeddingOutputType) {
+        if (!this.value) {
             this.value = emb;
+            this.outputType = embType;
+        }
     }
     //TODO: 
 
@@ -86,7 +88,8 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
     public override setInput(from: Node, input: Node): boolean {
         console.log('set input voxel');
         const fromEENB = from.getParent().getParent().getComponent(EditEmbeddingNodeBase);
-        if (fromEENB.nodeType !==  EditEmbeddingNodeType.Voxel && fromEENB.outputType === EditEmbeddingOutputType.Voxel) {
+        if (fromEENB.nodeType !==  EditEmbeddingNodeType.Voxel && (fromEENB.outputType === EditEmbeddingOutputType.VoxelEmbedding || fromEENB.outputType === EditEmbeddingOutputType.ClipEmbedding)) {
+            this.outputType = fromEENB.outputType;
             if (this.inputFrom1) {
                 const eenb = this.inputFrom1.getParent().getParent().getComponent(EditEmbeddingNodeBase);
                 eenb.outputTo = null;
@@ -107,7 +110,8 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
                 console.log('set new value');
                 const msg: EegMsg = {
                     emb: this.value, 
-                    eenv: this
+                    eenv: this,
+                    feature: null
                 }
 
                 this.EEGController.controller.node.emit(GET_VOXEL_FOR_EEGRAPH, msg);

@@ -21,7 +21,8 @@ export const DRAW_EDIT_VOXEL_EVENT = 'draw-edit-voxel';
 
 export type EegMsg = {
     emb: number[], 
-    eenv: EditEmbeddingNodeVoxel
+    eenv: EditEmbeddingNodeVoxel,
+    feature: number[]
 }
 
 @ccclass('MainController')
@@ -221,22 +222,22 @@ export class MainController extends Component {
                         }
                         let voxelData: Vec3[] = [];
     
-                        for (let x = 0; x < 64; x++) {
-                            for (let y = 0; y < 64; y++) {
-                                for (let z = 0; z < 64; z++) {
+                        for (let x = 0; x < 32; x++) {
+                            for (let y = 0; y < 32; y++) {
+                                for (let z = 0; z < 32; z++) {
                                     if (rawVoxelData[z][y][x]) {
-                                        voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                                        voxelData.push(new Vec3(x - 16, y - 16, z - 16));
                                     }
                                 }
                             }
                         }
     
-                        // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
-                        // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                        console.log(receiveData[0][2][0].length)
+                        /**@TODO 图片生成接口需要返回图片的image feature*/ 
                         const id = `create-${this.createNum++}`;
-                        if (!this.voxelDataHistory.push(voxelData, id, fileName, emb, -1)) {   // 如果队列满了则pop掉队首
+                        if (!this.voxelDataHistory.push(voxelData, id, fileName, emb, receiveData[0][2][0], -1)) {   // 如果队列满了则pop掉队首
                             this.voxelDataHistory.popHead();
-                            this.voxelDataHistory.push(voxelData, id, fileName, emb, -1);
+                            this.voxelDataHistory.push(voxelData, id, fileName, emb, receiveData[0][2][0], -1);
                         }   
                         
                         this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
@@ -392,7 +393,7 @@ export class MainController extends Component {
     }
 
     public onVoxelSelect(id: string, needSnapShot: boolean, snode: Node=null) {
-        this.VoxelNodeSelect.setRotationFromEuler(new Vec3(0, 0, 0));
+        this.VoxelNodeSelect.setRotationFromEuler(new Vec3(30, 330, 330));
         let i = 0;
         const voxelData: Vec3[] = this.voxelDataHistory.getVoxelById(id);
         const childList = this.VoxelNodeSelect.children;
@@ -485,8 +486,12 @@ export class MainController extends Component {
                         }
                     }
                     const emb = [0.046408578753471375,0.1299910843372345,-0.05709565803408623,-0.4654577374458313,0.9640616178512573,1.2251393795013428,0.42264729738235474,-0.1449238359928131,0.13472259044647217,0.08329255878925323,-0.4378288686275482,-0.4448590576648712,0.3434494733810425,1.2005075216293335,0.6205681562423706,0.1554761826992035,-1.525444746017456,-1.9303338527679443,0.2888311743736267,0.825538158416748,0.8960372805595398,-1.4977400302886963,-1.1900224685668945,0.4953117370605469,2.7216382026672363,-0.050605837255716324,1.1164931058883667,1.3104140758514404,-0.9651161432266235,3.166940927505493,-0.3273515999317169,4.66200065612793,0.8309621810913086,0.1482883095741272,-0.07999342679977417,0.47767794132232666,0.35074707865715027,-0.30998721718788147,3.3965556621551514,0.6455049514770508,-0.673679530620575,0.010111361742019653,0.23043528199195862,-0.3159293234348297,0.8093878626823425,0.36611905694007874,0.43059074878692627,1.238301157951355,-0.7439271211624146,0.46147727966308594,-0.24514058232307434,-0.23996128141880035,0.28146588802337646,5.5644917488098145,-2.2688663005828857,-0.0672692060470581,0.5803858041763306,-0.5518679022789001,0.5405962467193604,0.9395554661750793,1.0543742179870605,-0.79291832447052,0.3488030433654785,-4.642337799072266,-0.39394745230674744,0.1271403431892395,-3.359959602355957,0.3390505313873291,0.21817298233509064,0.17812618613243103,-0.04521254450082779,0.0630236342549324,1.1070332527160645,-0.0543753057718277,-0.5344977378845215,1.0041379928588867,0.04925447702407837,1.0052555799484253,0.026722528040409088,-2.53295636177063,0.5405471920967102,-0.022852113470435143,-0.5375044345855713,0.86555016040802,-0.31612154841423035,-0.17269670963287354,0.8462697267532349,-0.6180703639984131,-4.048862934112549,-0.6920191049575806,-0.09989648312330246,-0.274848073720932,-0.9751679301261902,-0.027049198746681213,0.6653702855110168,0.35132521390914917,-1.0255513191223145,0.9173023104667664,-0.21219174563884735,0.7127239108085632,-1.2450520992279053,-0.07957732677459717,-3.7841291427612305,0.4981483519077301,4.472257137298584,-0.7294455766677856,-1.9639827013015747,-0.10683143883943558,-5.8344316482543945,0.8349928855895996,0.48123201727867126,-0.011797439306974411,-0.24459730088710785,-2.6697514057159424,0.4365556836128235,1.1920667886734009,-0.18422842025756836,0.21733644604682922,-0.12541812658309937,-0.16774021089076996,-0.7357332110404968,1.0626137256622314,0.009034758433699608,0.1957768201828003,0.18625299632549286,-0.19347810745239258,-0.2231823205947876,0.743380069732666];
+                    const clipFeature = new Array(512);
+                    for (let i = 0; i < 512; i++) {
+                        clipFeature[i] = randomRange(-1, 1);
+                    }
                     console.log(emb.length);
-                    this.voxelDataHistory.push(vd, id, id, emb, parseInt(id));
+                    this.voxelDataHistory.push(vd, id, id, emb, clipFeature, parseInt(id));
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                     this.onVoxelSelect(id, true);
                 }
@@ -717,36 +722,6 @@ export class MainController extends Component {
         });
     }
 
-    private extend32to64(v32: []) {
-        const v64 = [];
-        for (let i = 0; i < 64; i++) {
-            v64.push([]);
-            for (let j = 0; j < 64; j++) {
-                v64[i].push([]);
-                for (let z = 0; z < 64; z++) {
-                    v64[i][j].push(0);
-                }
-            }
-        }
-        for (let i = 0; i < 32; i++) {
-            for (let j = 0; j < 32; j++) {
-                for (let k = 0; k < 32; k++) {
-                    if (v32[i][j][k]) {
-                        v64[i * 2][j * 2][k * 2] = 1;
-                        v64[i * 2 + 1][j * 2][k * 2] = 1;
-                        v64[i * 2][j * 2 + 1][k * 2] = 1;
-                        v64[i * 2][j * 2][k * 2 + 1] = 1;
-                        v64[i * 2 + 1][j * 2][k * 2 + 1] = 1;
-                        v64[i * 2 + 1][j * 2 + 1][k * 2] = 1;
-                        v64[i * 2][j * 2 + 1][k * 2 + 1] = 1;
-                        v64[i * 2 + 1][j * 2 + 1][k * 2 + 1] = 1;
-                    }
-                }
-            }
-        }
-        return v64;
-    }
-
     // id用来唯一标识这个体素
     // 调用此接口时思考一下id查重的问题
     // TODO：这里改成传回embedding，embedding在history里保存了，这样可以避免选的是自己生成的点
@@ -764,26 +739,20 @@ export class MainController extends Component {
                 for (let i = 0; i < emb.length; i++) {
                     emb[i] = parseFloat(emb[i]);
                 }
-                if (rawVoxelData.length === 32)
-                    rawVoxelData = this.extend32to64(rawVoxelData);
                 let voxelData: Vec3[] = [];
 
-                for (let x = 0; x < 64; x++) {
-                    for (let y = 0; y < 64; y++) {
-                        for (let z = 0; z < 64; z++) {
+                for (let x = 0; x < 32; x++) {
+                    for (let y = 0; y < 32; y++) {
+                        for (let z = 0; z < 32; z++) {
                             if (rawVoxelData[z][y][x]) {
-                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                                voxelData.push(new Vec3(x - 16, y - 16, z - 16));
                             }
                         }
                     }
                 }
-  
-                // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
-                // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-
-                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
+                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, idx1 === -1 ? idx0 : -1);
+                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1);
                 }   
                 
                 this.isGetVoxelFinished = true;
@@ -794,7 +763,7 @@ export class MainController extends Component {
         xhr.send();
     }
 
-    /**后端接受一个64*64*64的0 1矩阵 */
+    /**后端接受一个32*32*32的0 1矩阵 */
     public uploadVoxelToServer(voxelData: Vec3[]) {
 
         const xhr = new XMLHttpRequest();
@@ -807,9 +776,9 @@ export class MainController extends Component {
             if (xhr.readyState === 4 && xhr.status === 200) { 
                 const emb = JSON.parse(xhr.response)[0];
                 const id = `create-${this.createNum++}`;
-                if (!this.voxelDataHistory.push(voxelData, id, id, emb, -1)) {
+                if (!this.voxelDataHistory.push(voxelData, id, id, emb, null, -1)) {
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, id, emb, -1);
+                    this.voxelDataHistory.push(voxelData, id, id, emb, null, -1);
                 }
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                 this.onVoxelSelect(id, true);
@@ -845,11 +814,11 @@ export class MainController extends Component {
                 // 最好解决一下上传prompt重名的问题
                 let voxelData: Vec3[] = [];
 
-                for (let x = 0; x < 64; x++) {
-                    for (let y = 0; y < 64; y++) {
-                        for (let z = 0; z < 64; z++) {
+                for (let x = 0; x < 32; x++) {
+                    for (let y = 0; y < 32; y++) {
+                        for (let z = 0; z < 32; z++) {
                             if (rawVoxelData[z][y][x]) {
-                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                                voxelData.push(new Vec3(x - 16, y - 16, z - 16));
                             }
                         }
                     }
@@ -858,9 +827,9 @@ export class MainController extends Component {
                 const id = `create-${this.createNum++}`;
                 // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
                 // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
-                if (!this.voxelDataHistory.push(voxelData, id, id, msg.emb, -1)) {   // 如果队列满了则pop掉队首
+                if (!this.voxelDataHistory.push(voxelData, id, id, msg.emb, msg.feature, -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, id, msg.emb, -1);
+                    this.voxelDataHistory.push(voxelData, id, id, msg.emb, msg.feature, -1);
                 }   
                 
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
@@ -891,22 +860,22 @@ export class MainController extends Component {
                 // 最好解决一下上传prompt重名的问题
                 let voxelData: Vec3[] = [];
 
-                for (let x = 0; x < 64; x++) {
-                    for (let y = 0; y < 64; y++) {
-                        for (let z = 0; z < 64; z++) {
+                for (let x = 0; x < 32; x++) {
+                    for (let y = 0; y < 32; y++) {
+                        for (let z = 0; z < 32; z++) {
                             if (rawVoxelData[z][y][x]) {
-                                voxelData.push(new Vec3(x - 32, y - 32, z - 32));
+                                voxelData.push(new Vec3(x - 16, y - 16, z - 16));
                             }
                         }
                     }
                 }
 
-                // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
-                // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                console.log(receiveData[3][0].length)
+                /**@TODO text需要返回feature */
                 const id = `create-${this.createNum++}`;
-                if (!this.voxelDataHistory.push(voxelData, id, fileName, emb, -1)) {   // 如果队列满了则pop掉队首
+                if (!this.voxelDataHistory.push(voxelData, id, fileName, emb, receiveData[3][0], -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, fileName, emb, -1);
+                    this.voxelDataHistory.push(voxelData, id, fileName, emb, receiveData[3][0], -1);
                 }   
                 
                 this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
@@ -1121,6 +1090,10 @@ export class MainController extends Component {
     /* 外部访问主控模块属性函数 */
     public getVoxelEmbeddingById(id: string) {
         return this.voxelDataHistory.getEmbById(id);
+    }
+    
+    public getClipEmbeddingById(id: string) {
+        return this.voxelDataHistory.getClipFeatureById(id);
     }
 
     /**如果存在返回在数组中下标，不存在返回-1 */

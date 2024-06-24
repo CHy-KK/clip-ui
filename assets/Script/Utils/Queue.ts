@@ -6,6 +6,7 @@ export type VoxelRecord = {
     vid: string,
     name: string,
     embedding: Array<number>,
+    clipFeature: Array<number>,
     idxInData: number,
     snapShotState: boolean
 }
@@ -145,11 +146,11 @@ export class VoxelHistoryQueue {
      * @param idx: 标识获取体素在服务器data中的下标，如果是自定义体素则-1
      * @param sss: 当前是否获取snapshot
      */
-    public push(voxel: Vec3[], id: string, name: string, emb: number[], idx: number, sss: boolean = false): boolean {
+    public push(voxel: Vec3[], id: string, name: string, emb: number[], feature: number[], idx: number, sss: boolean = false): boolean {
         if (this.isExist(id))
             return true;
         
-        if (this.voxelIdxHistory.push({ vid: id, name: name, embedding: emb, idxInData: idx, snapShotState: sss })) {
+        if (this.voxelIdxHistory.push({ vid: id, name: name, embedding: emb, clipFeature: feature, idxInData: idx, snapShotState: sss })) {
             this.rawVoxelDataHistory.push(voxel);
             this.pushSprite(id, name);
             return true;
@@ -184,6 +185,11 @@ export class VoxelHistoryQueue {
     public getNameById(id: string) {
         let idxOut: IdxOutput = { idx: 0 };
         return this.isExist(id, idxOut) ? this.voxelIdxHistory.getElement(idxOut.idx).name : null;
+    }
+
+    public getClipFeatureById(id: string) {
+        let idxOut: IdxOutput = { idx: 0 };
+        return this.isExist(id, idxOut) ? this.voxelIdxHistory.getElement(idxOut.idx).clipFeature : null;
     }
 
     public popHead() {

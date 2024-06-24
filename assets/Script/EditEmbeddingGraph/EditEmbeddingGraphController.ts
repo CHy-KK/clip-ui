@@ -4,7 +4,7 @@ import { EditEmbeddingNodeOperation } from './EditEmbeddingNodeOperation';
 import { EditEmbeddingNodeVoxel } from './EditEmbeddingNodeVoxel';
 import { EditEmbeddingNodeBase, OutInfo } from './EditEmbeddingNodeBase';
 import { EditEmbeddingNodeNumber } from './EditEmbeddingNodeNumber';
-import { drawRect, drawRoundRect, EditEmbeddingNodeType } from '../Utils/Utils';
+import { drawRect, drawRoundRect, EditEmbeddingNodeType, EditEmbeddingOutputType } from '../Utils/Utils';
 import { EditEmbeddingNodeThreshold } from './EditEmbeddingNodeThreshold';
 const { ccclass, property } = _decorator;
 
@@ -370,7 +370,27 @@ export class EditEmbeddingGraphController extends Component {
         voxelNode.layer = this.node.layer;
         const eenv = voxelNode.addComponent(EditEmbeddingNodeVoxel);
         eenv.voxelSnapShot = curSp;
-        eenv.setEmbd(curEmb);
+        eenv.setEmbd(curEmb, EditEmbeddingOutputType.VoxelEmbedding);
+
+        this.editNode.addChild(voxelNode);
+    }
+
+    public addSnapShotToEditClip() {
+        const curId = this.controller.curSelectVoxelId;
+        if (!this.controller.isExistHistoryList(curId)) 
+            return;
+        
+        const curEmb: number[] = this.controller.getClipEmbeddingById(curId);
+        if (!curEmb)
+            return;
+        const curSp: SpriteFrame = this.controller.getVoxelSnapShotById(curId);
+        this.operations.push(curEmb);
+
+        const voxelNode = new Node();
+        voxelNode.layer = this.node.layer;
+        const eenv = voxelNode.addComponent(EditEmbeddingNodeVoxel);
+        eenv.voxelSnapShot = curSp;
+        eenv.setEmbd(curEmb, EditEmbeddingOutputType.ClipEmbedding);
 
         this.editNode.addChild(voxelNode);
     }
@@ -572,10 +592,6 @@ export class EditEmbeddingGraphController extends Component {
         this.detailInfoNode.getChildByName('embDimLabelNode').getComponent(Label).string = embLen.toString();
         this.detailInfoNode.getChildByName('minValLabelN').getComponent(Label).string = (-minVal).toFixed(2);
         this.detailInfoNode.getChildByName('maxValLabelN').getComponent(Label).string = maxVal.toFixed(2);
-           
-        console.log(this.detailInfoNode.getChildByName('embDimLabelNode').getComponent(Label).string);
-        console.log(this.detailInfoNode.getChildByName('minValLabelN').getComponent(Label).string);
-        console.log(this.detailInfoNode.getChildByName('maxValLabelN').getComponent(Label).string);
 
     }
 

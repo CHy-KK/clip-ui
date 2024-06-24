@@ -95,10 +95,11 @@ export const EENTypeWithDiffOperand = EditEmbeddingNodeType.BiDirAdd | EditEmbed
 
 export enum EditEmbeddingOutputType {
     /**Voxel embedding */ 
-    Voxel = 'Voxel',  
-    Number = 'Number',
+    VoxelEmbedding = 'Voxel',  
+    ClipEmbedding = 'Clip',
+    Number = 'Constant',
     /**当前节点输入类型不满足时 */
-    None = 'None'
+    None = ' '
 }
 
 

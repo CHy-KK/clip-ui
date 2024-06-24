@@ -68,9 +68,12 @@ export class EditEmbeddingNodeBase extends Component {
         return this._nodeType;
     }
 
-    public set outputType(val) {
-        if (val === EditEmbeddingOutputType.Number || val === EditEmbeddingOutputType.Voxel)
+    protected set outputType(val) {
+        if (val === EditEmbeddingOutputType.Number || val === EditEmbeddingOutputType.VoxelEmbedding || val === EditEmbeddingOutputType.ClipEmbedding) {
             this._outputType = val;
+            if (this.outputNode)
+                this.outputNode.getChildByName('outputType').getComponent(Label).string = val;
+        }
     }
 
     public get outputType() {
