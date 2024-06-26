@@ -41,7 +41,8 @@ export enum RequestName {
     SendPrompt = '/get_embeddings_by_text_query',
     UploadVoxel = '/upload_voxel',
     GetVoxelByEmbedding = '/get_voxel_by_embedding',
-    GetImageList = '/get_image_list'
+    GetImageList = '/get_image_list',
+    GetVoxelByFeature = '/get_voxel_by_feature'
 };
 
 export enum SelectingType {

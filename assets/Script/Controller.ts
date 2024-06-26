@@ -142,6 +142,14 @@ export class MainController extends Component {
     /**标识创建体素序号 */
     private createNum = 0;
 
+    /** TODO
+     * 1. **体素编辑界面允许2体素同时编辑，解决两个体素分开旋转的问题
+     * 2. *feature生成的后端接口 
+     * 3. ***拿objaverse的数据重新训练，可以尝试拿一些体素的组合也丢进去训练antoencoder，这里的组合可以是比较暴力的直接相加，也许能得到更好的encoder表达空间，但是这部分体素不参与clip的训练
+     * 4. **后端的层次聚类，虽然没有那么清晰的语义，但是也可以做，匹配输入prompt最接近的簇展示
+     * 5. **找找不同单词语义在clip feature的组合，比如汽车拆成轮子+车身
+     */
+
     start() {
         // 界面初始化
         this.canvasSize.x = this.UICanvas.getComponent(UITransform).contentSize.x;
@@ -251,7 +259,7 @@ export class MainController extends Component {
             };  
             xhr.send(formData);  
         });
-        this.node.on(GET_VOXEL_FOR_EEGRAPH, this.onGetVoxelForEEGraph, this);
+        this.node.on(GET_VOXEL_FOR_EEGRAPH, this.onGetVoxelForEEGraphByEmbedding, this);
 
         if (this.isUseTestCase) {
             /************* test code *************/
@@ -466,8 +474,10 @@ export class MainController extends Component {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
             const innerUI = this.UICanvas.getChildByName('InnerUI');
+            const outUI = this.UICanvas.getChildByName('OutUI');
             this.isInnerUI = !this.isInnerUI;
             innerUI.active = this.isInnerUI;
+            outUI.active = !outUI.active;
         } else if (this.isInnerUI) {
             if (key.keyCode === KeyCode.KEY_A) {
                 const id = `blank${this.blankNum++}`;
@@ -477,10 +487,11 @@ export class MainController extends Component {
                         this.voxelDataHistory.popHead();
                     const vd = [];
                     // for (let i = randomRangeInt(100, 5000); i >= 0; i--)
-                    //     vd.push(new Vec3(randomRangeInt(-32, 32), randomRangeInt(-32, 32), randomRangeInt(-32, 32)));
-                    for (let x = -8; x < 8; x++) {
-                        for (let y = -8; y < 8; y++) {
-                            for (let z = -8; z < 8; z++) {
+                    //     vd.push(new Vec3(randomRangeInt(-16, 16), randomRangeInt(-16, 16), randomRangeInt(-16, 16)));
+                    // vd.push(new Vec3(10, 0, 0));
+                    for (let x = -8; x <= 8; x++) {
+                        for (let y = -8; y <= 8; y++) {
+                            for (let z = -8; z <= 8; z++) {
                                 vd.push(new Vec3(x, y, z));
                             }
                         }
@@ -495,16 +506,17 @@ export class MainController extends Component {
                     this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
                     this.onVoxelSelect(id, true);
                 }
-            } else if (key.keyCode === KeyCode.DIGIT_1) {
+            } 
+            // else if (key.keyCode === KeyCode.DIGIT_1) {
                 
-                this.ScatterNode.active = true;
-                this.ScatterImageNode.active = false;
-                this.ScatterNode.getComponent(ScatterController).inistializeScatter();
-            }  else if (key.keyCode === KeyCode.DIGIT_3) {
-                this.ScatterNode.active = false;
-                this.ScatterImageNode.active = true;
-                this.ScatterImageNode.getComponent(ImageScatterController).drawImageScatter();
-            }
+            //     this.ScatterNode.active = true;
+            //     this.ScatterImageNode.active = false;
+            //     this.ScatterNode.getComponent(ScatterController).inistializeScatter();
+            // }  else if (key.keyCode === KeyCode.DIGIT_3) {
+            //     this.ScatterNode.active = false;
+            //     this.ScatterImageNode.active = true;
+            //     this.ScatterImageNode.getComponent(ImageScatterController).drawImageScatter();
+            // }
         }
     }
  
@@ -799,7 +811,7 @@ export class MainController extends Component {
         this.onVoxelSelect(id.toString(), needSnapShot);
     }
 
-    public onGetVoxelForEEGraph(msg: EegMsg) {
+    public onGetVoxelForEEGraphByEmbedding(msg: EegMsg) {
         console.log(msg.emb);
         let formData = new FormData();  
         formData.append("embedding", msg.emb.toString());
@@ -838,6 +850,49 @@ export class MainController extends Component {
         };  
         xhr.send(formData);  
     }
+
+    public onGetVoxelForEEGraphByFeature(msg: EegMsg) {
+        console.log(msg.feature);
+        let formData = new FormData();  
+        formData.append("feature", msg.feature.toString());
+        this.curEENV = msg.eenv;
+    
+        let xhr = new XMLHttpRequest();  
+        xhr.open('POST', SERVER_HOST + RequestName.GetVoxelByFeature, true);  
+        xhr.onload = () => {  
+            if (xhr.status === 200) {  
+                const receiveData = JSON.parse(xhr.response);
+                const emb = receiveData[0];
+                const rawVoxelData = receiveData[1];  
+                // 最好解决一下上传prompt重名的问题
+                let voxelData: Vec3[] = [];
+
+                for (let x = 0; x < 32; x++) {
+                    for (let y = 0; y < 32; y++) {
+                        for (let z = 0; z < 32; z++) {
+                            if (rawVoxelData[z][y][x]) {
+                                voxelData.push(new Vec3(x - 16, y - 16, z - 16));
+                            }
+                        }
+                    }
+                }
+
+                const id = `create-${this.createNum++}`;
+                // TODO: 这里需要思考当用户将自定义体素上传后加入整体数据列表后，如何修改voxelDataHistory中对应项的idx
+                // 如果这里是插值生成一个原总数据列表中没有的体素点，默认不加入总数据列表中，idx赋为-1
+                if (!this.voxelDataHistory.push(voxelData, id, id, emb, msg.feature, -1)) {   // 如果队列满了则pop掉队首
+                    this.voxelDataHistory.popHead();
+                    this.voxelDataHistory.push(voxelData, id, id, emb, msg.feature, -1);
+                }   
+                
+                this.node.on(SNAPSHOT_FOR_NEW_VOXEL_EVENT, this.snapShotVoxel, this);
+                this.onVoxelSelect(id, true);
+            }  
+        };  
+        xhr.send(formData);  
+    }
+
+
 
     public onGetVoxelByTextButtonClick() {
         const textInputNode = director.getScene().getChildByPath('mainUI/InnerUI/textInput/TEXT_LABEL');
