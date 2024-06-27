@@ -1,6 +1,6 @@
-import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Label, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view } from 'cc';
+import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Label, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view, Toggle, assert } from 'cc';
 import { MainController } from './Controller';
-import { angle2radian, cubeSize, EditState, isPosInQuad, RectSize } from './Utils/Utils';
+import { angle2radian, cubeSize, drawRoundRect, EditState, isPosInQuad, RectSize } from './Utils/Utils';
 import { Queue } from './Utils/Queue';
 import { PREVIEW } from 'cc/env';
 const { ccclass, property } = _decorator;
@@ -8,14 +8,13 @@ const { ccclass, property } = _decorator;
 /**实际显示范围为-voxelPosLimit到voxelPosLimit */
 const voxelPosLimit = 32;
 const opTipString = {
-    normal: '按住左alt旋转体素\n按住左ctrl框选\n按住D取消框选体素\n按DELETE删除选中的体素\n按C进入复制当前选中体素\n按住A选择本次需要增加的体素',
+    normal: '按住左alt旋转体素\n按住左ctrl框选\n按住D取消框选体素\n按DELETE删除选中的体素\n按C进入复制当前选中体素\n按住A选择本次需要增加的体素\n按Z回退上一步操作',
     copy: '按D退出复制模式\n按V在当前位置粘贴复制的体素',
     dirAdd:  '按D退出增加体素模式\n在拖动增加体素时按V粘贴增加的体素'
 }
 /********************************** 注意事项 ********************************** 
 * 1. 不要修改main camera的transfrom！！所有体素编辑坐标计算基于worldposition，但实际上应该是基于camera的local空间，main camera的transform全部置0即模拟在world space下的坐标，所以不能做修改！
 * 2. 每个ev生成后都要手动置材质，因为部分增加体素的行为比如direcational add会修改材质但是暂不显示，后面生成ev时就会材质错误*/
-
 
 type SelectInfo = {
     selectCubeSize: cubeSize,
@@ -71,6 +70,9 @@ export class EditVoxel extends Component {
     @property(Node)
     public readonly SelectGraphic: Node = null;
 
+    @property(Graphics)
+    public readonly BackGroundGraphic: Graphics = null;
+
     @property(Camera)
     public readonly curCamera: Camera = null;
 
@@ -104,6 +106,9 @@ export class EditVoxel extends Component {
     private voxelRead: HTMLInputElement = null;
     private voxelDownLoadLink: HTMLAnchorElement = null;
     private opTipLabel: Label = null;
+    private rotate90Check: Toggle = null;
+    /**记录选中体素旋转复位信息 */
+    private voxelRotateResetRecord: Vec3[] = [];
 
     /**
      * @type selectCubeSize: 选中体素包围盒
@@ -185,14 +190,15 @@ export class EditVoxel extends Component {
         // 对应鼠标事件的getLocation()
         this.viewHalfWidth = view.getViewportRect().width * 0.5;
         this.viewHalfHeight = view.getViewportRect().height * 0.5;
-        this.editboxX = director.getScene().getChildByPath('mainUI/OutUI/RAX/EditBox').getComponent(EditBox);
-        this.sliderX = director.getScene().getChildByPath('mainUI/OutUI/RAX/TotalSlider').getComponent(Slider);
-        this.editboxY = director.getScene().getChildByPath('mainUI/OutUI/RAY/EditBox').getComponent(EditBox);
-        this.sliderY = director.getScene().getChildByPath('mainUI/OutUI/RAY/TotalSlider').getComponent(Slider);
-        this.editboxZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/EditBox').getComponent(EditBox);
-        this.sliderZ = director.getScene().getChildByPath('mainUI/OutUI/RAZ/TotalSlider').getComponent(Slider);
+        this.editboxX = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAX/EditBox').getComponent(EditBox);
+        this.sliderX = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAX/TotalSlider').getComponent(Slider);
+        this.editboxY = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAY/EditBox').getComponent(EditBox);
+        this.sliderY = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAY/TotalSlider').getComponent(Slider);
+        this.editboxZ = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAZ/EditBox').getComponent(EditBox);
+        this.sliderZ = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAZ/TotalSlider').getComponent(Slider);
         this.opTipLabel = director.getScene().getChildByPath('mainUI/OutUI/OperationTip/tips').getComponent(Label);
         this.opTipLabel.string = opTipString.normal;
+        this.rotate90Check = director.getScene().getChildByPath('mainUI/OutUI/SelectingRotation/rotate90').getComponent(Toggle);
 
         // 初始化文件加载和下载模块
         this.voxelDownLoadLink = document.createElement("a");
@@ -216,8 +222,12 @@ export class EditVoxel extends Component {
                 
             };  
             reader.readAsText(file);  
-
         }); 
+
+        drawRoundRect(this.BackGroundGraphic, new Vec2(-630, 560), 290, 310, 10, true);
+        this.BackGroundGraphic.fillColor.fromHEX('#dddddd');
+        this.BackGroundGraphic.fill();
+        
     }
 
     // TODO: 是否需要一个操作记录栈，毕竟如果误操作导致体素暴增后就不好删除了
@@ -443,38 +453,59 @@ export class EditVoxel extends Component {
                 case EditState.Rotate:
                     if (this.selectInfo.selectNodeSet.size) {
                         const deltaMove: Vec2 = (e.getDelta()).multiplyScalar(0.5);
-                        this.selectInfo.selectRotate.add(deltaMove);
-                        // xoffset绕Y旋转，yoffset绕X旋转
-                        if (Math.abs(this.selectInfo.selectRotate.x) > 90) {
-                            const angle = Math.sign(deltaMove.x) * 90;
-                            const qy = Quat.fromAxisAngle(new Quat(), Vec3.UP, angle2radian(angle));
-                            this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-                                const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qy);
-                                chd.setPosition(pos.add(this.selectInfo.selectCentroid));
-                                // let rot = chd.worldRotation;
-                                // Quat.rotateAround(rot, rot, Vec3.UP, angle2radian(angle));
-                                // Quat.normalize(rot, rot);
-                                // chd.setWorldRotation(rot);
-                            });
-                            this.selectInfo.selectRotate.x = 0;
-                            this.selectInfo.selectRotateAcculate.x += angle;
-                        } 
-                        if (Math.abs(this.selectInfo.selectRotate.y) > 90) {
-                            const angle = -Math.sign(deltaMove.y) * 90
-                            const qx = Quat.fromAxisAngle(new Quat(), Vec3.RIGHT, angle2radian(angle));
-                            const childList = this.node.children;
-                            this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-                                const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qx);
-                                chd.setPosition(pos.add(this.selectInfo.selectCentroid));
-                                // let rot = chd.worldRotation;
-                                // Quat.rotateAround(rot, rot, Vec3.RIGHT, angle2radian(angle));
-                                // Quat.normalize(rot, rot);
-                                // chd.setWorldRotation(rot);
-                            });
-                            this.selectInfo.selectRotate.y = 0;
-                            this.selectInfo.selectRotateAcculate.y += angle;
+                        if (this.rotate90Check.isChecked) {
+                            this.selectInfo.selectRotate.add(deltaMove);
+                            // xoffset绕Y旋转，yoffset绕X旋转
+                            if (Math.abs(this.selectInfo.selectRotate.x) > 90) {
+                                const angle = Math.sign(deltaMove.x) * 90;
+                                const qy = Quat.fromAxisAngle(new Quat(), Vec3.UP, angle2radian(angle));
+                                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                    const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qy);
+                                    chd.setPosition(pos.add(this.selectInfo.selectCentroid));
+                                    // let rot = chd.worldRotation;
+                                    // Quat.rotateAround(rot, rot, Vec3.UP, angle2radian(angle));
+                                    // Quat.normalize(rot, rot);
+                                    // chd.setWorldRotation(rot);
+                                });
+                                this.selectInfo.selectRotate.x = 0;
+                                this.selectInfo.selectRotateAcculate.x += angle;
+                            } 
+                            if (Math.abs(this.selectInfo.selectRotate.y) > 90) {
+                                const angle = -Math.sign(deltaMove.y) * 90;
+                                const qx = Quat.fromAxisAngle(new Quat(), Vec3.RIGHT, angle2radian(angle));
+                                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                    const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qx);
+                                    chd.setPosition(pos.add(this.selectInfo.selectCentroid));
+                                    // let rot = chd.worldRotation;
+                                    // Quat.rotateAround(rot, rot, Vec3.RIGHT, angle2radian(angle));
+                                    // Quat.normalize(rot, rot);
+                                    // chd.setWorldRotation(rot);
+                                });
+                                this.selectInfo.selectRotate.y = 0;
+                                this.selectInfo.selectRotateAcculate.y += angle;
+                            }
+                        } else {
+                            if (Math.abs(deltaMove.x) > Math.abs(deltaMove.y)) {
+                                const qy = Quat.fromAxisAngle(new Quat(), Vec3.UP, angle2radian(deltaMove.x));
+                                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                    const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qy);
+                                    // chd.setPosition(Vec3.round(new Vec3, pos.add(this.selectInfo.selectCentroid)));
+                                    chd.setPosition(pos.add(this.selectInfo.selectCentroid));
+                                });
+                                this.selectInfo.selectRotate.x = 0;
+                                this.selectInfo.selectRotateAcculate.x += deltaMove.x;
+                            } else {
+                                const qx = Quat.fromAxisAngle(new Quat(), Vec3.RIGHT, angle2radian(-deltaMove.y));
+                                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                    const pos = Vec3.transformQuat(new Vec3, chd.position.subtract(this.selectInfo.selectCentroid), qx);
+                                    // chd.setPosition(Vec3.round(new Vec3, pos.add(this.selectInfo.selectCentroid)));
+                                    chd.setPosition(pos.add(this.selectInfo.selectCentroid));
+                                });
+                                this.selectInfo.selectRotate.y = 0;
+                                this.selectInfo.selectRotateAcculate.y += -deltaMove.y;
+                            }
                         }
-                    }
+                    } 
                     
                     // this.rotateAngleY += deltaMove.x;
                     // this.editboxY.string = this.rotateAngleY.toString();
@@ -703,8 +734,12 @@ export class EditVoxel extends Component {
                     case EditState.Selecting:   //  体素位移结束后，需要把体素local position归正到64 * 64空间
                         this.editState = EditState.None;
                     case EditState.Copying:
+                        // 记录选中体素的旋转复位坐标
+                        let recIdx = 0;
+                        this.voxelRotateResetRecord = new Array(this.selectInfo.selectNodeSet.size)
                         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-                            chd.position = Vec3.round(new Vec3(), chd.position);    
+                            chd.position = Vec3.round(new Vec3(), chd.position); 
+                            this.voxelRotateResetRecord[recIdx++] = new Vec3(chd.position);
                         });
                         Vec3.round(this.selectInfo.selectCentroid, this.selectInfo.selectCentroid);
                         break;
@@ -716,18 +751,13 @@ export class EditVoxel extends Component {
                             addArray.pop();
                         }
                         break;
-
                 }
     
                 this.isMove = false;
                 this.selectGraph.clear();
             } else {
-                
-            }
-            // if (this.editState === EditState.DirectionalAddSelect && this.selectInfo.selectNodeSet.size > 0) {
-            //     this.editState = 
-            // }
 
+            }
         }
     }
 
@@ -862,12 +892,23 @@ export class EditVoxel extends Component {
     }
 
     private onkeyUp(key: EventKeyboard) {
+                    
+        switch(key.keyCode) {
+            case KeyCode.ALT_LEFT:
+                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                    chd.setPosition(Vec3.round(new Vec3, chd.position));
+                });
+                break;
+        }
+
         if (this.editState >= EditState.DirectionalAdd) {
             if (this.editState === EditState.DirectionalAddSelect && this.selectInfo.selectNodeSet.size > 0) {
                 this.editState = EditState.DirectionalAdd;
             }
-        } else
+        }
+        else
             this.editState = EditState.None;
+
     }
 
     private onMouseWheel(e: EventMouse) {
@@ -963,6 +1004,22 @@ export class EditVoxel extends Component {
             this.voxelDownLoadLink.href = window.webkitURL.createObjectURL(textFileAsBlob);
         }
         this.voxelDownLoadLink.click();
+    }
+
+    public resetSelectingVoxel() {
+        console.log('reseting');
+        if (this.selectInfo.selectNodeSet.size) {
+            console.log("reset voxel pos" + this.selectInfo.selectNodeSet.size);
+            let i = 0;
+            assert(this.voxelRotateResetRecord.length === this.selectInfo.selectNodeSet.size, "复位体素记录列表长度和当前选中体素数量不一致！！");
+            console.log("reset voxel pos" + this.selectInfo.selectNodeSet.size);
+            this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                if(chd.position === this.voxelRotateResetRecord[i]) {
+                    console.error("chd position === this.voxelRotateResetRecord");
+                }
+                chd.setPosition(this.voxelRotateResetRecord[i++]);
+            });
+        }
     }
 }
 

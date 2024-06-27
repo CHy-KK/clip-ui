@@ -475,8 +475,8 @@ export class MainController extends Component {
             // 显隐UI
             const innerUI = this.UICanvas.getChildByName('InnerUI');
             const outUI = this.UICanvas.getChildByName('OutUI');
-            this.isInnerUI = !this.isInnerUI;
-            innerUI.active = this.isInnerUI;
+            innerUI.active = !innerUI.active;
+            this.isInnerUI = innerUI.active;
             outUI.active = !outUI.active;
         } else if (this.isInnerUI) {
             if (key.keyCode === KeyCode.KEY_A) {
