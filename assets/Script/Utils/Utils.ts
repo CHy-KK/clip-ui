@@ -186,3 +186,11 @@ export function drawRect(g: Graphics, startPoint: Vec2, width: number, height: n
     g.lineTo(startPoint.x, startPoint.y - height);
     g.lineTo(startPoint.x, startPoint.y);
 }
+
+export function deepCopyArray(arr: []): Array<any> {
+    const cpyArr = new Array(arr.length);
+    for (let i = 0; i < arr.length; i++) {
+        cpyArr[i] = arr[i];
+    }
+    return cpyArr;
+}

@@ -23,7 +23,8 @@ type SelectInfo = {
     selectZ: number,
     selectCentroid: Vec3,
     selectRotate: Vec2,
-    selectRotateAcculate: Vec2
+    selectRotateAcculate: Vec2,
+    isSelectMoved: boolean
 }
 
 type AddVoxelInfo = {
@@ -35,6 +36,36 @@ type AddVoxelInfo = {
     negLimit: number,
     addArrayPositive: Array<Node>,
     posLimit: number,
+}
+
+type EditOpRecord = {
+    opType: EditOpRecordType,
+    AddPosSet: Set<number>,
+    DelPosSet: Set<number>,
+}
+
+/**
+ * @enum Move: 旋转和位移
+ * @enum Add: 单向增加和复制粘贴
+ * @enum Delete: 删除 
+ */
+enum EditOpRecordType {
+    Move = 'Move',
+    Add = 'Add',
+    Delete = 'Delete'
+}
+
+function pos2id(pos: Vec3) {
+    return (pos.x + 32) * 4096 + (pos.y + 32) * 64 + (pos.z + 32);
+}
+
+function id2pos(id: number) {
+    const z = id % 64;
+    id = (id - z) / 64;
+    const y = id % 64;
+    id = (id - y) / 64;
+    const x = id;
+    return new Vec3(x - 32, y - 32, z - 32);
 }
 
 class VoxelData {
@@ -109,6 +140,13 @@ export class EditVoxel extends Component {
     private rotate90Check: Toggle = null;
     /**记录选中体素旋转复位信息 */
     private voxelRotateResetRecord: Vec3[] = [];
+    /**记录回退操作 */
+    private revocationRecord: EditOpRecord[] = [];
+    private tempOpRecord: EditOpRecord = {
+        opType: EditOpRecordType.Move,
+        AddPosSet: new Set(),
+        DelPosSet: new Set()
+    };
 
     /**
      * @type selectCubeSize: 选中体素包围盒
@@ -131,7 +169,8 @@ export class EditVoxel extends Component {
         selectZ: 0,
         selectCentroid: new Vec3(0, 0, 0),
         selectRotate: new Vec2(0, 0),
-        selectRotateAcculate: new Vec2(0, 0)
+        selectRotateAcculate: new Vec2(0, 0),
+        isSelectMoved: false
     }
 
     /**
@@ -262,6 +301,7 @@ export class EditVoxel extends Component {
         }
         this.selectInfo.selectCentroid.multiplyScalar(0);
         this.selectInfo.selectRotate.multiplyScalar(0);
+        this.selectInfo.isSelectMoved = false;
     }
 
     public async onDrawEditVoxelById(vid: string) {
@@ -289,6 +329,8 @@ export class EditVoxel extends Component {
         this.resetSelectInfo();
         this.voxelPosQuery.clear();
         this.editState = EditState.None;
+        while (this.revocationRecord.length)
+            this.revocationRecord.pop();
         const childList = this.node.children;
         let i = 0;
         for (; i < voxelData.length; i++) {
@@ -355,12 +397,36 @@ export class EditVoxel extends Component {
                                 console.log(this.addInfo.castVoxelPos);
                         }
                     } 
-                    if (!(rayCastRes && castSelect)) {  // 取消选中状态，TODO: 感觉最好有一个button专门执行取消选中的工作
-                        this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-                            this.deleteCoincideVoxel(chd);
-                            const mr = chd.getComponent(MeshRenderer);
-                            mr.setMaterialInstance(this.defaultVoxelMat, 0);
-                        });
+                    if (!(rayCastRes && castSelect)) {  // 取消选中状态，TODO: 在旋转体素不是90度时会出现
+                        if (this.selectInfo.selectNodeSet.size) {
+                            const delChild = []
+                            this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                                if (this.detectCoincideVoxel(chd)) {
+                                    const mr = chd.getComponent(MeshRenderer);
+                                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                                    const posId = pos2id(chd.position);
+                                    if (this.tempOpRecord.DelPosSet.has(posId)) {
+                                        this.tempOpRecord.DelPosSet.delete(posId);
+                                    }
+                                    else
+                                        this.tempOpRecord.AddPosSet.add(posId);
+                                } else {
+                                    delChild.push(chd);
+                                }
+                            });
+                            const opRecord: EditOpRecord = {
+                                opType: EditOpRecordType.Move,
+                                AddPosSet: new Set(this.tempOpRecord.AddPosSet),
+                                DelPosSet: new Set(this.tempOpRecord.DelPosSet),
+                            }
+                            for (let i = 0; i < delChild.length; i++) {
+                                this.node.removeChild(delChild[i]);
+                                this.activeEditVoxelNum--;
+                            }
+                            this.revocationRecord.push(opRecord);
+                            this.tempOpRecord.AddPosSet.clear();
+                            this.tempOpRecord.DelPosSet.clear();
+                        }
                         this.resetSelectInfo();
                     }
                 } else if (this.editState === EditState.DirectionalAdd) {
@@ -451,6 +517,7 @@ export class EditVoxel extends Component {
                     break;
 
                 case EditState.Rotate:
+                    this.selectInfo.isSelectMoved = true;
                     if (this.selectInfo.selectNodeSet.size) {
                         const deltaMove: Vec2 = (e.getDelta()).multiplyScalar(0.5);
                         if (this.rotate90Check.isChecked) {
@@ -515,6 +582,7 @@ export class EditVoxel extends Component {
 
                 case EditState.Copying:
                 case EditState.Selecting: {
+                    this.selectInfo.isSelectMoved = true;
                     const clickX = this.wsHalfWidth * (posSS.x - this.viewHalfWidth) / this.viewHalfWidth;
                     const clickY = this.wsHalfHeight * (posSS.y - this.viewHalfHeight) / this.viewHalfHeight;
 
@@ -688,15 +756,17 @@ export class EditVoxel extends Component {
                         });
                         matInstance.setProperty('mainColor', new Color(255, 255, 0, 255));
                         this.selectInfo.selectCentroid.multiplyScalar(this.selectInfo.selectNodeSet.size);
+                        
                         for (let i = 0; i < this.activeEditVoxelNum; i++) {
                             const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
                             if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuad)) {
                                 if (!this.selectInfo.selectNodeSet.has(childList[i])) {
                                     this.selectInfo.selectNodeSet.add(childList[i]);
-                                    this.selectInfo.selectCentroid.add(childList[i].position);
                                     const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
                                     mr.setMaterialInstance(matInstance, 0);
                                     const pos = childList[i].position;
+                                    this.selectInfo.selectCentroid.add(pos);
+                                    this.tempOpRecord.DelPosSet.add(pos2id(pos));
                                     this.voxelPosQuery.setData(pos.x, pos.y, pos.z, null);
                                     this.selectInfo.selectCubeSize.left = Math.min(this.selectInfo.selectCubeSize.left, pos.x);
                                     this.selectInfo.selectCubeSize.right = Math.max(this.selectInfo.selectCubeSize.right, pos.x);
@@ -707,6 +777,7 @@ export class EditVoxel extends Component {
                                 }
                             }
                         }
+                        this.tempOpRecord.opType = EditOpRecordType.Move;
                         this.selectInfo.selectCentroid.multiplyScalar(1 / this.selectInfo.selectNodeSet.size);
                         break;
                     case EditState.MultiDelete:
@@ -773,9 +844,11 @@ export class EditVoxel extends Component {
                         this.editState = EditState.Rotate;
                         break;
                     case KeyCode.CTRL_LEFT: // 框选 
-                        this.selectGraph.strokeColor.fromHEX('0099aa');
-                        this.selectGraph.fillColor = new Color(0, 200, 200, 80);
-                        this.editState = EditState.MultiSelect;
+                        if (!this.selectInfo.isSelectMoved) {   // 如果选中体素发生过移动或旋转则不允许框选其他体素，否则撤销操作无法准确获取发生变化的体素
+                            this.selectGraph.strokeColor.fromHEX('0099aa');
+                            this.selectGraph.fillColor = new Color(0, 200, 200, 80);
+                            this.editState = EditState.MultiSelect;
+                        }
                         break;
                     case KeyCode.KEY_C:     // 复制当前选中的所有体素，进入copying状态，阻塞其他一切操作，直到粘贴或者取消复制
                         if (this.selectInfo.selectNodeSet.size > 0) {
@@ -817,10 +890,41 @@ export class EditVoxel extends Component {
                         this.editState = EditState.DirectionalAddSelect;
                         break;
                     case KeyCode.KEY_D:     // 本次框选中的体素，如果处于被选中状态则取消选中
-                        this.editState = EditState.MultiDelete;
-                        this.selectGraph.strokeColor.fromHEX('ff0000');
-                        this.selectGraph.fillColor = new Color(210, 0, 0, 40);
+                        if (!this.selectInfo.isSelectMoved) {   // 如果选中体素发生过移动或旋转则不允许取消，否则撤销操作无法准确获取发生变化的体素
+                            this.editState = EditState.MultiDelete;
+                            this.selectGraph.strokeColor.fromHEX('ff0000');
+                            this.selectGraph.fillColor = new Color(210, 0, 0, 40);
+                        }
                         break;
+                    case KeyCode.KEY_Z:
+                        const op = this.revocationRecord.pop();
+                        // 撤销操作即要把被添加的节点集合删掉，把被删掉的节点集合添加回来
+                        op.AddPosSet.forEach((addPosId: number) => {
+                            const addPos = id2pos(addPosId);
+                            const addNode = this.voxelPosQuery.getData(addPos.x, addPos.y, addPos.z);
+                            assert(addNode !== null, "delNode is not exist!!");
+                            this.node.removeChild(addNode);
+                            addNode.destroy();
+                            this.activeEditVoxelNum--;
+                            this.voxelPosQuery.setData(addPos.x, addPos.y, addPos.z, null);
+                        });
+                        op.DelPosSet.forEach((delPosId: number) => {
+                            const delPos = id2pos(delPosId);
+                            if (this.activeEditVoxelNum === childList.length) {
+                                const ev = this.controller.createVoxel();
+                                this.node.addChild(ev);
+                            } else if (this.activeEditVoxelNum > childList.length) {
+                                console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
+                            }
+                            const ev = childList[this.activeEditVoxelNum++];
+                            const mr = ev.getComponent(MeshRenderer);
+                            mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                            ev.setPosition(new Vec3(delPos.x, delPos.y, delPos.z));
+                            ev.active = true;
+                            ev.setScale(1,1,1);
+                            this.voxelPosQuery.setData(delPos.x, delPos.y, delPos.z, ev);
+                        });
+                        
                         
                 }
             } else if (this.editState === EditState.Copying) {  // 复制模式
@@ -878,12 +982,19 @@ export class EditVoxel extends Component {
                 }
             } else if (this.editState === EditState.DirectionalAddMove && key.keyCode === KeyCode.KEY_V) {
                 const addArray = this.addInfo.addArrayNegative.length > 0 ? this.addInfo.addArrayNegative : this.addInfo.addArrayPositive;
-   
+                const delChild = [];
                 for (let i = addArray.length; i > 0; i--) {
-                    const mr = childList[this.activeEditVoxelNum - i].getComponent(MeshRenderer);
-                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
-                    this.deleteCoincideVoxel(childList[this.activeEditVoxelNum - i]);
+                    if (this.detectCoincideVoxel(childList[this.activeEditVoxelNum - i])) {
+                        const mr = childList[this.activeEditVoxelNum - i].getComponent(MeshRenderer);
+                        mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                    } else {
+                        delChild.push(childList[this.activeEditVoxelNum - i]);
+                    }
                     addArray.pop();
+                }
+                for (let i = 0; i < delChild.length; i++) {
+                    this.node.removeChild(delChild[i]);
+                    this.activeEditVoxelNum--;
                 }
             }
             
@@ -892,8 +1003,8 @@ export class EditVoxel extends Component {
     }
 
     private onkeyUp(key: EventKeyboard) {
-                    
         switch(key.keyCode) {
+            // 由于旋转其实也是隐性的选中状态，所以在取消选中状态时会检测coincide体素，并且将操作记录添加到撤销列表中，所以不用在这里处理
             case KeyCode.ALT_LEFT:
                 this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                     chd.setPosition(Vec3.round(new Vec3, chd.position));
@@ -933,18 +1044,14 @@ export class EditVoxel extends Component {
         //  TODO：这里计算屏幕坐标没有计入camera的旋转，后面如果有需求可以补上
         
     }
-    
-    private deleteCoincideVoxel(chd: Node) { // 在复制/增加体素后需要检查是否移动之后原位置上就有体素了，如果有，需要把那个位置上原有的体素加入删除队列
-        const res = this.voxelPosQuery.getData(chd.position.x, chd.position.y, chd.position.z);
 
-        if (res != null) {
-            this.activeEditVoxelNum -= 1;
-            this.node.removeChild(chd);
-            chd.destroy();
-        } 
-        // else {
+    /**在复制/增加体素后需要检查是否移动之后原位置上就有体素了，如果有，返回false，否则true */ 
+    private detectCoincideVoxel(chd: Node): boolean { 
+        const res = this.voxelPosQuery.getData(chd.position.x, chd.position.y, chd.position.z);
+        if (res != null) 
+            return false; 
         this.voxelPosQuery.setData(chd.position.x, chd.position.y, chd.position.z, chd);
-        // }
+        return true;
     }
 
     public onEditTextRAChange(text: string, editbox: EditBox, customEventData: string) {
@@ -1007,12 +1114,9 @@ export class EditVoxel extends Component {
     }
 
     public resetSelectingVoxel() {
-        console.log('reseting');
         if (this.selectInfo.selectNodeSet.size) {
-            console.log("reset voxel pos" + this.selectInfo.selectNodeSet.size);
             let i = 0;
             assert(this.voxelRotateResetRecord.length === this.selectInfo.selectNodeSet.size, "复位体素记录列表长度和当前选中体素数量不一致！！");
-            console.log("reset voxel pos" + this.selectInfo.selectNodeSet.size);
             this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                 if(chd.position === this.voxelRotateResetRecord[i]) {
                     console.error("chd position === this.voxelRotateResetRecord");
