@@ -39,20 +39,8 @@ type AddVoxelInfo = {
 }
 
 type EditOpRecord = {
-    opType: EditOpRecordType,
     AddPosSet: Set<number>,
     DelPosSet: Set<number>,
-}
-
-/**
- * @enum Move: 旋转和位移
- * @enum Add: 单向增加和复制粘贴
- * @enum Delete: 删除 
- */
-enum EditOpRecordType {
-    Move = 'Move',
-    Add = 'Add',
-    Delete = 'Delete'
 }
 
 function pos2id(pos: Vec3) {
@@ -141,9 +129,8 @@ export class EditVoxel extends Component {
     /**记录选中体素旋转复位信息 */
     private voxelRotateResetRecord: Vec3[] = [];
     /**记录回退操作 */
-    private revocationRecord: EditOpRecord[] = [];
+    private UndoRecord: EditOpRecord[] = [];
     private tempOpRecord: EditOpRecord = {
-        opType: EditOpRecordType.Move,
         AddPosSet: new Set(),
         DelPosSet: new Set()
     };
@@ -329,8 +316,8 @@ export class EditVoxel extends Component {
         this.resetSelectInfo();
         this.voxelPosQuery.clear();
         this.editState = EditState.None;
-        while (this.revocationRecord.length)
-            this.revocationRecord.pop();
+        while (this.UndoRecord.length)
+            this.UndoRecord.pop();
         const childList = this.node.children;
         let i = 0;
         for (; i < voxelData.length; i++) {
@@ -414,18 +401,11 @@ export class EditVoxel extends Component {
                                     delChild.push(chd);
                                 }
                             });
-                            const opRecord: EditOpRecord = {
-                                opType: EditOpRecordType.Move,
-                                AddPosSet: new Set(this.tempOpRecord.AddPosSet),
-                                DelPosSet: new Set(this.tempOpRecord.DelPosSet),
-                            }
                             for (let i = 0; i < delChild.length; i++) {
                                 this.node.removeChild(delChild[i]);
                                 this.activeEditVoxelNum--;
                             }
-                            this.revocationRecord.push(opRecord);
-                            this.tempOpRecord.AddPosSet.clear();
-                            this.tempOpRecord.DelPosSet.clear();
+                            this.pushUndoRecord();
                         }
                         this.resetSelectInfo();
                     }
@@ -777,7 +757,6 @@ export class EditVoxel extends Component {
                                 }
                             }
                         }
-                        this.tempOpRecord.opType = EditOpRecordType.Move;
                         this.selectInfo.selectCentroid.multiplyScalar(1 / this.selectInfo.selectNodeSet.size);
                         break;
                     case EditState.MultiDelete:
@@ -874,6 +853,7 @@ export class EditVoxel extends Component {
                             while (i < childList.length && childList[i].active) {
                                 childList[i++].active = false;
                             }
+                            this.tempOpRecord.DelPosSet = new Set();
                         }
                         break;
                     case KeyCode.DELETE:    // 删除当前框选中的所有体素
@@ -883,11 +863,13 @@ export class EditVoxel extends Component {
                             this.node.removeChild(chd);
                             chd.destroy();
                         });
+                        this.pushUndoRecord();
                         this.selectInfo.selectNodeSet.clear();
                         this.resetSelectInfo();
                         break;
                     case KeyCode.KEY_A:     // 在一个体素的一个方向上增加体素
                         this.editState = EditState.DirectionalAddSelect;
+                        this.tempOpRecord.DelPosSet = new Set();
                         break;
                     case KeyCode.KEY_D:     // 本次框选中的体素，如果处于被选中状态则取消选中
                         if (!this.selectInfo.isSelectMoved) {   // 如果选中体素发生过移动或旋转则不允许取消，否则撤销操作无法准确获取发生变化的体素
@@ -897,7 +879,7 @@ export class EditVoxel extends Component {
                         }
                         break;
                     case KeyCode.KEY_Z:
-                        const op = this.revocationRecord.pop();
+                        const op = this.UndoRecord.pop();
                         // 撤销操作即要把被添加的节点集合删掉，把被删掉的节点集合添加回来
                         op.AddPosSet.forEach((addPosId: number) => {
                             const addPos = id2pos(addPosId);
@@ -945,8 +927,10 @@ export class EditVoxel extends Component {
                                 ev.active = true;
                                 ev.setScale(1,1,1);
                                 this.voxelPosQuery.setData(ev.position.x, ev.position.y, ev.position.z, ev);
+                                this.tempOpRecord.AddPosSet.add(pos2id(ev.position));
                             }
                         });
+                        this.pushUndoRecord();
                         let i = this.activeEditVoxelNum;
                         while (i < childList.length && childList[i].active) {
                             childList[i++].active = false;
@@ -987,11 +971,13 @@ export class EditVoxel extends Component {
                     if (this.detectCoincideVoxel(childList[this.activeEditVoxelNum - i])) {
                         const mr = childList[this.activeEditVoxelNum - i].getComponent(MeshRenderer);
                         mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                        this.tempOpRecord.AddPosSet.add(pos2id(childList[this.activeEditVoxelNum - i].position));
                     } else {
                         delChild.push(childList[this.activeEditVoxelNum - i]);
                     }
                     addArray.pop();
                 }
+                this.pushUndoRecord();
                 for (let i = 0; i < delChild.length; i++) {
                     this.node.removeChild(delChild[i]);
                     this.activeEditVoxelNum--;
@@ -1124,6 +1110,16 @@ export class EditVoxel extends Component {
                 chd.setPosition(this.voxelRotateResetRecord[i++]);
             });
         }
+    }
+
+    private pushUndoRecord() {
+        const opRecord: EditOpRecord = {
+            AddPosSet: new Set(this.tempOpRecord.AddPosSet),
+            DelPosSet: new Set(this.tempOpRecord.DelPosSet),
+        }
+        this.UndoRecord.push(opRecord);
+        this.tempOpRecord.AddPosSet.clear();
+        this.tempOpRecord.DelPosSet.clear();
     }
 }
 
