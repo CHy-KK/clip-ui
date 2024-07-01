@@ -134,6 +134,9 @@ export class EditVoxel extends Component {
         AddPosSet: new Set(),
         DelPosSet: new Set()
     };
+    private isEdit2Voxel: boolean = false;
+    private isChosingAnother: boolean = false;
+    private curEditId: string = '';
 
     /**
      * @type selectCubeSize: 选中体素包围盒
@@ -263,7 +266,7 @@ export class EditVoxel extends Component {
     // TODO: 1. 对于选中状态，将记录从坐标查询表中删除，直到取消选中状态时于所处坐标，查询该坐标是否存在体素，如果有则覆盖并删除原体素，并将active体素计数-1
     // TODO: 2. 对于复制状态，新复制出来的一份视为取消选中状态，查询当前坐标体素情况做覆盖，
     // TODO: 3. 对于单面增加状态，不能用框选，只能用点选，要设置一种新状态做单独处理。由于不会移动原有位置的体素，所以不需要考虑原体素坐标查询问题。
-    update(deltaTime: number) { 
+    update(deltaTime: number) {
         if (this.isMove && this.controller.isOutUI() && (this.editState === EditState.MultiSelect || this.editState === EditState.MultiDelete)) {
             this.selectGraph.clear();
             this.selectGraph.moveTo(this.clickUIPos.x, this.clickUIPos.y);
@@ -277,11 +280,11 @@ export class EditVoxel extends Component {
     }
 
     private resetSelectInfo() {
-        this.selectInfo.selectNodeSet.clear();  
+        this.selectInfo.selectNodeSet.clear();
         this.selectInfo.selectCubeSize = {
             left: 10000,
-            right: -10000, 
-            bottom: 10000, 
+            right: -10000,
+            bottom: 10000,
             top: -10000,
             back: 10000,
             front: -10000
@@ -294,7 +297,19 @@ export class EditVoxel extends Component {
     public async onDrawEditVoxelById(vid: string) {
 
         const voxelData = this.controller.getRawVoxelDataById(vid);
-        this.renderEditVoxel(voxelData);
+        if (this.isChosingAnother && this.isEdit2Voxel)
+            return;
+        else if (this.isChosingAnother) {
+            this.renderEditVoxel(voxelData, 10);
+            // TODO: 每次render会清空上次状态并从0开始设定所有体素节点，需要改成接着activeEditVoxelNum接着渲染，不能单纯靠判断offser是否为0来决定是否不清状态，否则第一次渲染也会保留状态，建议函数加一个boolean参数
+            const voxelDataAnother = this.controller.getRawVoxelDataById(this.curEditId);
+            console.log('render another');
+            this.renderEditVoxel(voxelDataAnother, -10, true);
+
+        } else {
+            this.renderEditVoxel(voxelData);
+            this.curEditId = vid;
+        }
     }
 
     public onUploadEditVoxelButtonClick() {
@@ -307,36 +322,41 @@ export class EditVoxel extends Component {
         this.controller.uploadVoxelToServer(voxelData);
     }
 
-    public renderEditVoxel(voxelData: Vec3[]) {
+    public renderEditVoxel(voxelData: Vec3[], xOffset: number = 0, isRenderAnother: boolean = false) {
         // 把之前的所有状态清空
         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
             const mr = chd.getComponent(MeshRenderer);
             mr.setMaterialInstance(this.defaultVoxelMat, 0);
         })
         this.resetSelectInfo();
-        this.voxelPosQuery.clear();
+        if (!isRenderAnother)
+            this.voxelPosQuery.clear();
         this.editState = EditState.None;
         while (this.UndoRecord.length)
             this.UndoRecord.pop();
+        this.tempOpRecord.AddPosSet.clear();
+        this.tempOpRecord.DelPosSet.clear();
         const childList = this.node.children;
         let i = 0;
+        const anotherIdx = isRenderAnother ? this.activeEditVoxelNum : 0;
+        
         for (; i < voxelData.length; i++) {
-            if (i === childList.length) {
+            if (i + anotherIdx === childList.length) {
                 const ev = this.controller.createVoxel();
                 this.node.addChild(ev);
                 // this.voxelList.Edit.push(ev);
-            } else if (i > childList.length) {
+            } else if (i + anotherIdx > childList.length) {
                 console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
             }
-            const ev = childList[i];
+            const ev = childList[i + anotherIdx];
             const mr = ev.getComponent(MeshRenderer);
             mr.setMaterialInstance(this.defaultVoxelMat, 0);
-            ev.position = new Vec3(voxelData[i].x, voxelData[i].y, voxelData[i].z);
+            ev.position = new Vec3(voxelData[i].x + xOffset, voxelData[i].y, voxelData[i].z);
             ev.active = true;
             ev.setScale(1,1,1);
-            this.voxelPosQuery.setData(voxelData[i].x, voxelData[i].y, voxelData[i].z, ev);
-
+            this.voxelPosQuery.setData(ev.position.x, ev.position.y, ev.position.z, ev);
         }
+        i += anotherIdx;
         this.activeEditVoxelNum = i;
         while (i < childList.length && childList[i].active) {
             childList[i++].active = false;
@@ -367,7 +387,7 @@ export class EditVoxel extends Component {
                     if (rayCastRes) {
                         const res = PhysicsSystem.instance.raycastClosestResult.collider.node;
                         if (this.selectInfo.selectNodeSet.has(res)) {
-                            this.selectInfo.selectZ = res.worldPosition.z; 
+                            this.selectInfo.selectZ = res.worldPosition.z;
                             this.addInfo.castVoxelPos = res.worldPosition;
                         }
                     }
@@ -377,7 +397,7 @@ export class EditVoxel extends Component {
                         if (this.selectInfo.selectNodeSet.has(res)) {
                             this.editState = EditState.Selecting;
                             castSelect = true;
-                            this.selectInfo.selectZ = res.worldPosition.z; 
+                            this.selectInfo.selectZ = res.worldPosition.z;
                             this.addInfo.castVoxelPos = res.worldPosition;
                             this.addInfo.startVoxel = res.position;
                             if (PREVIEW)
@@ -949,7 +969,7 @@ export class EditVoxel extends Component {
                         break;
 
                 }
-            } else if (this.editState === EditState.DirectionalAdd) {
+            } else if (this.editState === EditState.DirectionalAdd) {   // 单向增加模式
                 switch(key.keyCode) {
                     case KeyCode.KEY_A:
                         this.editState = EditState.DirectionalAddSelect;
@@ -983,7 +1003,9 @@ export class EditVoxel extends Component {
                     this.activeEditVoxelNum--;
                 }
             }
-            
+            if (key.keyCode === KeyCode.KEY_B) {
+                this.isChosingAnother = true;
+            }
         } 
 
     }
@@ -995,6 +1017,9 @@ export class EditVoxel extends Component {
                 this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                     chd.setPosition(Vec3.round(new Vec3, chd.position));
                 });
+                break;
+            case KeyCode.KEY_B:
+                this.isChosingAnother = false;
                 break;
         }
 
