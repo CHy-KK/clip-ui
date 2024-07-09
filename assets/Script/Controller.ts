@@ -17,6 +17,7 @@ export const SERVER_HOST = 'http://127.0.0.1:5000';    // 注意这里端口可�
 const GET_VOXEL_FINISH_EVENT = 'getvoxel-voxel-finish';
 const SNAPSHOT_FOR_NEW_VOXEL_EVENT = 'snapshot-for-new-voxel';
 export const GET_VOXEL_FOR_EEGRAPH = 'getvoxel-edit-embedding-graph'
+export const GET_VOXEL_FOR_EEGRAPH_BY_FEATURE = 'getvoxel-edit-embedding-graph-by-feature'
 export const DRAW_EDIT_VOXEL_EVENT = 'draw-edit-voxel';
 
 export type EegMsg = {
@@ -260,6 +261,7 @@ export class MainController extends Component {
             xhr.send(formData);  
         });
         this.node.on(GET_VOXEL_FOR_EEGRAPH, this.onGetVoxelForEEGraphByEmbedding, this);
+        this.node.on(GET_VOXEL_FOR_EEGRAPH_BY_FEATURE, this.onGetVoxelForEEGraphByFeature, this);
 
         if (this.isUseTestCase) {
             /************* test code *************/
@@ -762,9 +764,10 @@ export class MainController extends Component {
                         }
                     }
                 }
-                if (!this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
+                console.log('why reading 0');
+                if (!this.voxelDataHistory.push(voxelData, id, id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1)) {   // 如果队列满了则pop掉队首
                     this.voxelDataHistory.popHead();
-                    this.voxelDataHistory.push(voxelData, id, idx1 === -1 ? this.data[idx0].name : id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1);
+                    this.voxelDataHistory.push(voxelData, id, id, emb, responseVoxel[2][0], idx1 === -1 ? idx0 : -1);
                 }   
                 
                 this.isGetVoxelFinished = true;
@@ -851,6 +854,7 @@ export class MainController extends Component {
         xhr.send(formData);  
     }
 
+    // TODO: 这里的后端接口还没实现
     public onGetVoxelForEEGraphByFeature(msg: EegMsg) {
         console.log(msg.feature);
         let formData = new FormData();  
@@ -971,23 +975,19 @@ export class MainController extends Component {
             this.quadPanelNode.getChildByName('select2').active = true;
     }
 
-
+    /**@TODO 这里的idx和调色盘显示出来的对应不上 */ 
     public async onInterpolationButtonClick() {
         // this.panelClickPos.xy
         const childList = this.quadPanelNode.children;
         const getIdx = (i: number) => {
-            return this.voxelDataHistory.getIdxInDataById(childList[i].getComponent(PanelNode).vid)
+            return this.voxelDataHistory.getIdxInDataById(childList[i].getComponent(PanelNode).vid);
         }
         const idxList = [
             childList[0].active ? getIdx(0) : -1,
             childList[1].active ? getIdx(1) : -1,
             childList[2].active ? getIdx(2) : -1,
             childList[3].active ? getIdx(3) : -1];
-        const id = this.data[idxList[0]].name + '-' 
-            + (idxList[1] === -1 ? '' : (this.data[idxList[1]].name + '-')) 
-            + (idxList[2] === -1 ? '' : (this.data[idxList[2]].name + '-')) 
-            + (idxList[3] === -1 ? '' : (this.data[idxList[3]].name + '-')) 
-            + this.panelClickPos.x.toString() + '-' + this.panelClickPos.y.toString();
+        const id = `create-${this.createNum++}`;
         const needSnapShot = !this.voxelDataHistory.isExist(id);
         if (needSnapShot) {
             this.getVoxelFromServer(id, idxList[0], idxList[1], idxList[2], idxList[3], this.panelClickPos.x, this.panelClickPos.y);

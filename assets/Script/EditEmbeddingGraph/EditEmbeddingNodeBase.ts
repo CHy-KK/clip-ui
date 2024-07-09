@@ -50,6 +50,7 @@ export class EditEmbeddingNodeBase extends Component {
         this.nameLabel = funcNode.getChildByName('nameLabel');
         this.backgroundGraphic = funcNode.getComponent(Graphics);
         this.connectLineGraphic = funcNode.getChildByPath('connectGraphButton/connectLineGraph').getComponent(Graphics);
+        this.connectLineGraphic.strokeColor.fromHEX('#ffffff');
         this.outputNode = funcNode.getChildByName('connectGraphButton');
         this.inputNode1 = funcNode.getChildByName('inputButton1');
         this.inputNode2 = funcNode.getChildByName('inputButton2');

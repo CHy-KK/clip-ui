@@ -147,6 +147,9 @@ export class VoxelHistoryQueue {
      * @param sss: 当前是否获取snapshot
      */
     public push(voxel: Vec3[], id: string, name: string, emb: number[], feature: number[], idx: number, sss: boolean = false): boolean {
+        console.log('reading 0????');
+        console.log('reading 0????');
+        console.log('reading 0????');
         if (this.isExist(id))
             return true;
         

@@ -68,7 +68,8 @@ export class EditEmbeddingNodeVoxel extends EditEmbeddingNodeBase {
             if (this.value !== newFromVal) {
                 this.value = newFromVal;
                 /**@TODO 这里的feature后面需要根据情况填入，如果feature */
-                this.EEGController.controller.node.emit(GET_VOXEL_FOR_EEGRAPH, { emb: this.value, eenv: this, feature: null});
+                if (this.outputType === EditEmbeddingOutputType.VoxelEmbedding)
+                    this.EEGController.controller.node.emit(GET_VOXEL_FOR_EEGRAPH, { emb: this.value, eenv: this, feature: null});
                 this.outputTo?.getParent().getParent().getComponent(EditEmbeddingNodeBase).changeInputValue(this.outputNode);
             }
             this.isInputChange = false;

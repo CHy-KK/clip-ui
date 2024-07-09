@@ -42,7 +42,8 @@ export enum RequestName {
     UploadVoxel = '/upload_voxel',
     GetVoxelByEmbedding = '/get_voxel_by_embedding',
     GetImageList = '/get_image_list',
-    GetVoxelByFeature = '/get_voxel_by_feature'
+    GetVoxelByFeature = '/get_voxel_by_feature',
+    GetImageHierarchy = '/get_image_hierarchy'
 };
 
 export enum SelectingType {

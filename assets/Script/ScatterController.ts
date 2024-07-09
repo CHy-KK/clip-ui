@@ -114,6 +114,7 @@ export class ScatterController extends Component {
         this._tileLength = val;
     }
 
+    
     public getSelectListHead() {
         return this.selectDataList[0];
     }
