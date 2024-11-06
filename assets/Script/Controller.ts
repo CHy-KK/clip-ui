@@ -142,6 +142,8 @@ export class MainController extends Component {
     private blankNum = 0;   
     /**标识创建体素序号 */
     private createNum = 0;
+    private innerUI: Node = null;
+    private outUI: Node = null;
 
     /** TODO
      * 1. **体素编辑界面允许2体素同时编辑，解决两个体素分开旋转的问题
@@ -155,6 +157,9 @@ export class MainController extends Component {
         // 界面初始化
         this.canvasSize.x = this.UICanvas.getComponent(UITransform).contentSize.x;
         this.canvasSize.y = this.UICanvas.getComponent(UITransform).contentSize.y;
+        
+        this.innerUI = this.UICanvas.getChildByName('InnerUI');
+        this.outUI = this.UICanvas.getChildByName('OutUI');
         // 计算rgb调色盘区域坐标
         const quadPanel = this.UICanvas.getChildByPath('InnerUI/quadPanel');
         this.quadPanelPos = {
@@ -475,11 +480,9 @@ export class MainController extends Component {
     private keyDown(key: EventKeyboard) {
         if (key.keyCode === KeyCode.KEY_U) {
             // 显隐UI
-            const innerUI = this.UICanvas.getChildByName('InnerUI');
-            const outUI = this.UICanvas.getChildByName('OutUI');
-            innerUI.active = !innerUI.active;
-            this.isInnerUI = innerUI.active;
-            outUI.active = !outUI.active;
+            this.innerUI.active = !this.innerUI.active;
+            this.isInnerUI = this.innerUI.active;
+            this.outUI.active = !this.outUI.active;
         } else if (this.isInnerUI) {
             if (key.keyCode === KeyCode.KEY_A) {
                 const id = `blank${this.blankNum++}`;
@@ -791,6 +794,9 @@ export class MainController extends Component {
             if (xhr.readyState === 4 && xhr.status === 200) { 
                 const emb = JSON.parse(xhr.response)[0];
                 const id = `create-${this.createNum++}`;
+                for (let i = 0; i < voxelData.length; i++) {
+                    voxelData[i].add3f(-16, -16, -16);
+                }
                 if (!this.voxelDataHistory.push(voxelData, id, id, emb, null, -1)) {
                     this.voxelDataHistory.popHead();
                     this.voxelDataHistory.push(voxelData, id, id, emb, null, -1);
@@ -973,6 +979,22 @@ export class MainController extends Component {
 
         if (gradientComp.snNum >= 2) 
             this.quadPanelNode.getChildByName('select2').active = true;
+
+            // init(surfaceVoxel)
+            // for voxel in selectedVoxels
+            //     ray=voxelLocalPos - transformToVoxelCoordinateSystem(CameraWorldPos)
+            //     // rayDir为长度为3的列表，值为1或-1，分别代表视角方向射线从三轴正负方向射入
+            //     rayDir=directionDetect(ray)            
+            //     surfaceRay=[surfaceXCenterLocalPos(voxelLocalPos),
+            //         surfaceYCenterLocalPos(voxelLocalPos),
+            //     surfaceZCenterLocalPos(voxelLocalPos)] - transformToVoxelCoordinateSystem(CameraWorldPos)
+            //     // 计算三面是否存在一个面是无遮挡
+            //     for i from 0 to 2
+            //         if(hitTestFirst(surfaceRay[i])==voxel)
+            //             surfaceVoxel.add(hitresult)
+            //             break
+                    
+
     }
 
     /**@TODO 这里的idx和调色盘显示出来的对应不上 */ 
@@ -1169,7 +1191,7 @@ export class MainController extends Component {
     }
 
     public isOutUI() {
-        return !this.isInnerUI;
+        return this.outUI.active;
     }
 
     public get curSelectVoxelId() {

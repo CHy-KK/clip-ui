@@ -15,7 +15,8 @@ export class EditEmbeddingNodeThreshold extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(32, -31);
         this.backgroundGraphic.lineTo(-32, -31);
         this.backgroundGraphic.lineTo(-32, 15);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.nodeBoundingBox = {
             left: -34, 
             right: 34,
@@ -30,11 +31,12 @@ export class EditEmbeddingNodeThreshold extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(32, 1);
         this.backgroundGraphic.lineTo(-32, 1);
         this.backgroundGraphic.lineTo(-32, 15);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.nameLabel.setPosition(0, 15);
         this.nameLabel.getComponent(Label).string = 'Threshold';
         this.nodeType = EditEmbeddingNodeType.Threshold;
-        this.outputType = EditEmbeddingOutputType.Voxel;
+        this.outputType = EditEmbeddingOutputType.VoxelEmbedding;
 
         /**input bg */
         this.backgroundGraphic.moveTo(-32, 0);
@@ -42,7 +44,8 @@ export class EditEmbeddingNodeThreshold extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(0, -30);
         this.backgroundGraphic.lineTo(-32, -30);
         this.backgroundGraphic.lineTo(-32, 0);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.inputNode1.active = true;
         this.inputNode2.active = true;
         this.inputNode3.active = true;
@@ -72,7 +75,7 @@ export class EditEmbeddingNodeThreshold extends EditEmbeddingNodeBase {
         let originFrom = null;
         let fromEENB = from.getParent().getParent().getComponent(EditEmbeddingNodeBase);
         if (input === this.inputNode1) {
-            if (fromEENB.outputType !== EditEmbeddingOutputType.Voxel)
+            if (fromEENB.outputType !== EditEmbeddingOutputType.VoxelEmbedding)
                 return false;
             originFrom = this.inputFrom1;
         } else if (input === this.inputNode2) {

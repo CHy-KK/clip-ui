@@ -97,13 +97,15 @@ export class EditEmbeddingGraphController extends Component {
         this.constantInputNode = this.node.getChildByPath('constantInput/TEXT_LABEL');
         const editGraphBg = this.node.getChildByPath('showFormula/background').getComponent(Graphics);
 
-        editGraphBg.fillColor.fromHEX('#dddddd');
+        editGraphBg.fillColor.fromHEX('#ffffff');
         const maskRect = this.node.getChildByName('showFormula').getComponent(UITransform).contentSize;
-        drawRoundRect(editGraphBg, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
+        // drawRoundRect(editGraphBg, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
+        drawRoundRect(editGraphBg, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, false);
         editGraphBg.fill();
         const editGraphMask = this.node.getChildByName('showFormula').getComponent(Graphics);
 
-        drawRoundRect(editGraphMask, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
+        // drawRoundRect(editGraphMask, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, true);
+        drawRoundRect(editGraphMask, new Vec2(-maskRect.x * 0.5, maskRect.y * 0.5), maskRect.x, maskRect.y, 10, false);
         editGraphMask.fill();
         
         const buttonBgGraph = this.node.getChildByName('ButtonBg').getComponent(Graphics);
@@ -503,7 +505,6 @@ export class EditEmbeddingGraphController extends Component {
                 g3.stroke();    
             }
             if (dragEENB.outputTo) {
-                console.log('move output node');
                 const go = dragEENB.connectLineGraphic;
                 go.clear();
                 go.moveTo(0, 0);

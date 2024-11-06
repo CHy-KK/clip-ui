@@ -1,4 +1,4 @@
-import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Label, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view, Toggle, assert } from 'cc';
+import { _decorator, Camera, Color, color, Component, director, EditBox, error, EventKeyboard, EventMouse, EventTouch, geometry, Graphics, input, Input, KeyCode, Label, Mat4, Material, memop, MeshRenderer, Node, NodeSpace, PhysicsSystem, quat, Quat, RenderableComponent, Slider, Vec2, Vec3, Vec4, view, Toggle, assert, TextAsset, Sprite, lerp, Rect, UITransform, rect } from 'cc';
 import { MainController } from './Controller';
 import { angle2radian, cubeSize, drawRoundRect, EditState, isPosInQuad, RectSize } from './Utils/Utils';
 import { Queue } from './Utils/Queue';
@@ -82,6 +82,14 @@ class VoxelData {
     }
 }
 
+enum BrushType {
+    None = 0,
+    Track = 1,
+    Rect = 2,
+    Ellipse = 3,
+    Eraser = 4
+}
+
 
 @ccclass('EditVoxel')
 export class EditVoxel extends Component {
@@ -103,6 +111,11 @@ export class EditVoxel extends Component {
 
     @property(Material)
     public readonly addVoxelMat: Material = null;
+    
+    @property(TextAsset)
+    itemGiftText: TextAsset = null!;
+
+    // @property
 
     private editState: EditState = 0;
     private voxelPosQuery: VoxelData = new VoxelData();
@@ -137,6 +150,11 @@ export class EditVoxel extends Component {
     private isEdit2Voxel: boolean = false;
     private isChosingAnother: boolean = false;
     private curEditId: string = '';
+    private colorSlider: Slider = null;
+    private colorGradientPanel: Node = null;
+    private colorResult: Sprite = null;
+    private colorMovePos: Vec2 = new Vec2();
+    private colorUV: Vec2 = new Vec2();
 
     /**
      * @type selectCubeSize: 选中体素包围盒
@@ -188,6 +206,14 @@ export class EditVoxel extends Component {
     private viewHalfHeight: number;
     private wsHalfWidth: number;
     private wsHalfHeight: number;
+    private isColorMove: boolean = false;
+    private voxelColorRecord: Map<Node, string> = new Map();
+    private color2Mat: Map<string, {mat: Material, vlist: Set<Node>}> = new Map();
+    private isUsingBrush: boolean = false;
+    private brushBuffer: Array<boolean> = new Array();
+    private tmpBrushBuffer: Array<Vec2> = new Array();
+    private brushState: BrushType = 0;
+    private brushStartPos: Vec2 = new Vec2();
     
 
     onEnable () {
@@ -215,20 +241,43 @@ export class EditVoxel extends Component {
         this.selectGraph.strokeColor.fromHEX('0099aa');
         this.selectGraph.fillColor = new Color(0, 200, 200, 80);
         this.calScreenSizeinWorldSpace();
-
+        this.color2Mat.set('ffffff', {mat: this.defaultVoxelMat, vlist: new Set()});
+        this.color2Mat.set('ffff00', {mat: this.selectVoxelMat, vlist: new Set()});
         // 对应鼠标事件的getLocation()
         this.viewHalfWidth = view.getViewportRect().width * 0.5;
         this.viewHalfHeight = view.getViewportRect().height * 0.5;
-        this.editboxX = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAX/EditBox').getComponent(EditBox);
-        this.sliderX = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAX/TotalSlider').getComponent(Slider);
-        this.editboxY = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAY/EditBox').getComponent(EditBox);
-        this.sliderY = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAY/TotalSlider').getComponent(Slider);
-        this.editboxZ = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAZ/EditBox').getComponent(EditBox);
-        this.sliderZ = director.getScene().getChildByPath('mainUI/OutUI/CameraRotation/RAZ/TotalSlider').getComponent(Slider);
-        this.opTipLabel = director.getScene().getChildByPath('mainUI/OutUI/OperationTip/tips').getComponent(Label);
+        const outUI = director.getScene().getChildByPath('mainUI/OutUI');
+        this.editboxX = outUI.getChildByPath('CameraRotation/RAX/EditBox').getComponent(EditBox);
+        this.sliderX = outUI.getChildByPath('CameraRotation/RAX/TotalSlider').getComponent(Slider);
+        this.editboxY = outUI.getChildByPath('CameraRotation/RAY/EditBox').getComponent(EditBox);
+        this.sliderY = outUI.getChildByPath('CameraRotation/RAY/TotalSlider').getComponent(Slider);
+        this.editboxZ = outUI.getChildByPath('CameraRotation/RAZ/EditBox').getComponent(EditBox);
+        this.sliderZ = outUI.getChildByPath('CameraRotation/RAZ/TotalSlider').getComponent(Slider);
+        this.opTipLabel = outUI.getChildByPath('OperationTip/tips').getComponent(Label);
         this.opTipLabel.string = opTipString.normal;
-        this.rotate90Check = director.getScene().getChildByPath('mainUI/OutUI/SelectingRotation/rotate90').getComponent(Toggle);
+        this.rotate90Check = outUI.getChildByPath('SelectingRotation/rotate90').getComponent(Toggle);
+        this.colorSlider = outUI.getChildByPath('ChooseColor/colorSlider').getComponent(Slider);
+        this.colorGradientPanel = outUI.getChildByPath('ChooseColor/colorGradient');
+        this.colorResult = outUI.getChildByPath('ChooseColor/resultColor').getComponent(Sprite);
 
+        //绘制brush图标
+        const rectg = outUI.getChildByPath('Brush/usebrush/BrushMenu/Rectangle/Graphics').getComponent(Graphics);
+        const ellipseg = outUI.getChildByPath('Brush/usebrush/BrushMenu/Ellipse/Graphics').getComponent(Graphics);
+        const trackg = outUI.getChildByPath('Brush/usebrush/BrushMenu/Track/Graphics').getComponent(Graphics);
+        const brushMenug = outUI.getChildByPath('Brush/usebrush/BrushMenu').getComponent(Graphics);
+        rectg.rect(-10, -7, 20, 14);
+        rectg.strokeColor.fromHEX('#BB6100');
+        rectg.lineWidth = 3;
+        rectg.stroke();
+        ellipseg.ellipse(0, 0, 10, 7);
+        ellipseg.strokeColor.fromHEX('#BB6100');
+        ellipseg.lineWidth = 3;
+        ellipseg.stroke();
+        trackg.moveTo(-10, -2)
+        trackg.bezierCurveTo(-1, 12, 5, -25, 10, 7);
+        trackg.strokeColor.fromHEX('#BB6100');
+        trackg.lineWidth = 3;
+        trackg.stroke();
         // 初始化文件加载和下载模块
         this.voxelDownLoadLink = document.createElement("a");
         this.voxelRead = document.createElement('input');
@@ -253,9 +302,16 @@ export class EditVoxel extends Component {
             reader.readAsText(file);  
         }); 
 
-        drawRoundRect(this.BackGroundGraphic, new Vec2(-630, 560), 290, 310, 10, true);
+        drawRoundRect(this.BackGroundGraphic, new Vec2(-630, 575), 290, 495, 10, true);
         this.BackGroundGraphic.fillColor.fromHEX('#dddddd');
         this.BackGroundGraphic.fill();
+        // const voxelDataTmp = [];
+        // const data = this.itemGiftText.text!.split('\r\n');
+        // for (let i = 0; i < data.length; i++) {
+        //     const posstr = data[i].split(' ');
+        //     voxelDataTmp.push(new Vec3(parseFloat(posstr[0]) - 16, parseFloat(posstr[1]) - 16, parseFloat(posstr[2]) - 16));
+        // }
+        // this.renderEditVoxel(voxelDataTmp);  
         
     }
 
@@ -277,6 +333,7 @@ export class EditVoxel extends Component {
             this.selectGraph.stroke();
             this.selectGraph.fill();
         }
+        // console.log(this.editState);
     }
 
     private resetSelectInfo() {
@@ -313,21 +370,43 @@ export class EditVoxel extends Component {
     }
 
     public onUploadEditVoxelButtonClick() {
-        const voxelData = [];
+        const voxelData: Vec3[] = [];
         const childList = this.node.children;
         
         for (let i = 0; i < childList.length; i++) {
             voxelData.push(childList[i].position);
+            voxelData[i].add3f(16, 16, 16);
+            console.log(voxelData[i].x, voxelData[i].y, voxelData[i].z);
+            if (voxelData[i].x < 0 || voxelData[i].x > 31)
+                console.error('out bound');
+            if (voxelData[i].y < 0 || voxelData[i].y > 31)
+                console.error('out bound');
+            if (voxelData[i].z < 0 || voxelData[i].x > 31)
+                console.error('out bound');
         }
         this.controller.uploadVoxelToServer(voxelData);
     }
 
     public renderEditVoxel(voxelData: Vec3[], xOffset: number = 0, isRenderAnother: boolean = false) {
         // 把之前的所有状态清空
-        this.selectInfo.selectNodeSet.forEach((chd: Node) => {
-            const mr = chd.getComponent(MeshRenderer);
-            mr.setMaterialInstance(this.defaultVoxelMat, 0);
-        })
+        // this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+        //     const mr = chd.getComponent(MeshRenderer);
+        //     mr.setMaterialInstance(this.defaultVoxelMat, 0);
+        // })
+        this.color2Mat.forEach((value, key) => {
+            if (key !== 'ffffff') {
+                value.vlist.forEach(ev => {
+                    this.color2Mat.get('ffffff').vlist.add(ev);
+                    this.voxelColorRecord.set(ev, 'ffffff');
+                    const mr = ev.getComponent(MeshRenderer);
+                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                });
+                if (key !== 'ffff00') {
+                    value.mat.destroy();
+                    this.color2Mat.delete(key);
+                }
+            }
+        });
         this.resetSelectInfo();
         if (!isRenderAnother)
             this.voxelPosQuery.clear();
@@ -343,6 +422,8 @@ export class EditVoxel extends Component {
         for (; i < voxelData.length; i++) {
             if (i + anotherIdx === childList.length) {
                 const ev = this.controller.createVoxel();
+                this.voxelColorRecord.set(ev, 'ffffff');
+                this.color2Mat.get('ffffff').vlist.add(ev);
                 this.node.addChild(ev);
                 // this.voxelList.Edit.push(ev);
             } else if (i + anotherIdx > childList.length) {
@@ -350,7 +431,8 @@ export class EditVoxel extends Component {
             }
             const ev = childList[i + anotherIdx];
             const mr = ev.getComponent(MeshRenderer);
-            mr.setMaterialInstance(this.defaultVoxelMat, 0);
+            const matPtr = this.color2Mat.get(this.voxelColorRecord.get(ev));
+            mr.setMaterialInstance(matPtr.mat, 0);
             ev.position = new Vec3(voxelData[i].x + xOffset, voxelData[i].y, voxelData[i].z);
             ev.active = true;
             ev.setScale(1,1,1);
@@ -381,6 +463,33 @@ export class EditVoxel extends Component {
             const screenRay = new geometry.Ray();
             this.curCamera.screenPointToRay(e.getLocationX(), e.getLocationY(), screenRay);
             const rayCastRes: boolean = PhysicsSystem.instance.raycastClosest(screenRay);
+            if (this.isUsingBrush) {
+                const TmpGraphic = director.getScene().getChildByPath('mainUI/OutUI/Brush/usebrush/BrushMenu/TempGraphic');
+                const brushPanelWorldPos = TmpGraphic.worldPosition;
+                // 这里是以边长为32的体素编写的
+                if (pos.x >= brushPanelWorldPos.x - 160 && pos.x <= brushPanelWorldPos.x + 160 && pos.y >= brushPanelWorldPos.y - 160 && pos.y <= brushPanelWorldPos.y + 160) {
+                    const width = 320 / 32;
+                    const x = Math.min(31, Math.max(0, Math.floor((pos.x + 160 - brushPanelWorldPos.x) / width)));
+                    const y = Math.min(31, Math.max(0, Math.floor((pos.y + 160 - brushPanelWorldPos.y) / width)));
+                    this.brushStartPos = new Vec2(x, y);
+                    this.calculateBrush(x, y, TmpGraphic.getComponent(Graphics));
+                }
+                return;
+            }
+            const colorPanelWorldPos = this.colorGradientPanel.worldPosition;
+            const colorPaneContentSize = this.colorGradientPanel.getComponent(UITransform).contentSize;
+            const colorPaneluvx = (pos.x - colorPanelWorldPos.x + colorPaneContentSize.x * 0.5) / colorPaneContentSize.x;
+            const colorPaneluvy = (pos.y - colorPanelWorldPos.y + colorPaneContentSize.y * 0.5) / colorPaneContentSize.y;
+            if (colorPaneluvx >= 0 && colorPaneluvx <= 1 && colorPaneluvy >= 0 && colorPaneluvy <= 1) {
+                this.isColorMove = true;
+                const gradientEndColor = this.colorGradientPanel.getComponent(Sprite).color;
+                
+                const resColor = Vec3.lerp(new Vec3(), new Vec3(0, 0, 0), Vec3.lerp(new Vec3(), new Vec3(1, 1, 1), new Vec3(gradientEndColor.x, gradientEndColor.y, gradientEndColor.z), colorPaneluvx), colorPaneluvy);
+                this.colorResult.color = new Color(resColor.x * 255, resColor.y * 255, resColor.z * 255, 255);
+                this.colorGradientPanel.getChildByName('touchIcon').worldPosition = new Vec3(pos.x, pos.y, 0);
+                this.colorUV = new Vec2(colorPaneluvx, colorPaneluvy);
+                return;
+            }
             if (this.selectInfo.selectNodeSet.size > 0) {
                 let castSelect: boolean = false;
                 if (this.editState === EditState.Copying) { // 点击空屏不取消选中状态
@@ -410,7 +519,7 @@ export class EditVoxel extends Component {
                             this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                                 if (this.detectCoincideVoxel(chd)) {
                                     const mr = chd.getComponent(MeshRenderer);
-                                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                                    mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(chd)).mat, 0);
                                     const posId = pos2id(chd.position);
                                     if (this.tempOpRecord.DelPosSet.has(posId)) {
                                         this.tempOpRecord.DelPosSet.delete(posId);
@@ -485,10 +594,12 @@ export class EditVoxel extends Component {
                         this.opTipLabel.string = opTipString.normal;
                         this.selectInfo.selectNodeSet.delete(res);
                         const mr = res.getComponent(MeshRenderer);
-                        mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                        mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(res)).mat, 0);
                     } else if (this.selectInfo.selectNodeSet.size === 0) {
                         this.opTipLabel.string = opTipString.dirAdd;
                         const mr = res.getComponent(MeshRenderer);
+                        console.log(this.selectVoxelMat);
+                        console.log(this.defaultVoxelMat);
                         mr.setMaterialInstance(this.selectVoxelMat, 0);
                         // 因为不用移动，所以不用设置selectInfo中的其他属性
                         this.selectInfo.selectNodeSet.add(res);
@@ -510,6 +621,33 @@ export class EditVoxel extends Component {
                 this.isMove = true;
             if (!this.controller)
                 this.controller = director.getScene().getChildByName('MainController').getComponent(MainController);
+                
+            if (this.isUsingBrush) {
+                const TmpGraphic = director.getScene().getChildByPath('mainUI/OutUI/Brush/usebrush/BrushMenu/TempGraphic');
+                const brushPanelWorldPos = TmpGraphic.worldPosition;
+                // 这里是以边长为32的体素编写的
+                if (pos.x >= brushPanelWorldPos.x - 160 && pos.x <= brushPanelWorldPos.x + 160 && pos.y >= brushPanelWorldPos.y - 160 && pos.y <= brushPanelWorldPos.y + 160) {
+                    const width = 320 / 32;
+                    const x = Math.min(31, Math.max(0, Math.floor((pos.x + 160 - brushPanelWorldPos.x) / width)));
+                    const y = Math.min(31, Math.max(0, Math.floor((pos.y + 160 - brushPanelWorldPos.y) / width)));
+                    this.calculateBrush(x, y, TmpGraphic.getComponent(Graphics));
+                }
+                return;
+            }
+
+            if (this.isColorMove) {
+                const colorPanelWorldPos = this.colorGradientPanel.worldPosition;
+                const colorPaneContentSize = this.colorGradientPanel.getComponent(UITransform).contentSize;
+                const uvx = Math.min(1, Math.max(0, (pos.x - colorPanelWorldPos.x + colorPaneContentSize.x * 0.5) / colorPaneContentSize.x));
+                const uvy = Math.min(1, Math.max(0, (pos.y - colorPanelWorldPos.y + colorPaneContentSize.y * 0.5) / colorPaneContentSize.y));                
+                const gradientEndColor = this.colorGradientPanel.getComponent(Sprite).color;
+                const resColor = Vec3.lerp(new Vec3(), new Vec3(0, 0, 0), Vec3.lerp(new Vec3(), new Vec3(1, 1, 1), new Vec3(gradientEndColor.x, gradientEndColor.y, gradientEndColor.z), uvx), uvy);
+                this.colorResult.color = new Color(resColor.x * 255, resColor.y * 255, resColor.z * 255, 255);
+                this.colorGradientPanel.getChildByName('touchIcon').worldPosition = new Vec3(colorPanelWorldPos.x + colorPaneContentSize.x * (uvx - 0.5), colorPanelWorldPos.y + colorPaneContentSize.y * (uvy - 0.5), 0);
+                this.colorUV = new Vec2(uvx, uvy);
+                return;
+                
+            }
             switch (this.editState) {
                 case EditState.MultiDelete:
                 case EditState.MultiSelect:
@@ -673,6 +811,8 @@ export class EditVoxel extends Component {
                                 if (this.activeEditVoxelNum === childList.length) {
                                     const ev = this.controller.createVoxel();
                                     this.node.addChild(ev);
+                                    this.voxelColorRecord.set(ev, 'ffffff');
+                                    this.color2Mat.get('ffffff').vlist.add(ev);
                                 } else if (this.activeEditVoxelNum > childList.length) {
                                     throw new Error('EDIT记录的体素数量超过实际子节点体素数量！！');
                                 }
@@ -681,7 +821,7 @@ export class EditVoxel extends Component {
                                 ev.setScale(1,1,1);
                                 ev.setPosition(Vec3.add(new Vec3(), this.addInfo.startVoxel, Vec3.multiplyScalar(new Vec3(), this.addInfo.castVoxelFace, posArray.length + 1)));
                                 const mr = (ev.getComponent(MeshRenderer) as RenderableComponent);
-                                mr.setMaterialInstance(this.addVoxelMat, 0);
+                                mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(ev)).mat, 0);
                                 posArray.push(ev);
                             }
                         }
@@ -707,6 +847,8 @@ export class EditVoxel extends Component {
                             while (negArray.length < moveNum && negArray.length <= this.addInfo.posLimit) { 
                                 if (this.activeEditVoxelNum === childList.length) {
                                     const ev = this.controller.createVoxel();
+                                    this.voxelColorRecord.set(ev, 'ffffff');
+                                    this.color2Mat.get('ffffff').vlist.add(ev);
                                     this.node.addChild(ev);
                                 } else if (this.activeEditVoxelNum > childList.length) {
                                     throw new Error('EDIT记录的体素数量超过实际子节点体素数量！！');
@@ -738,7 +880,25 @@ export class EditVoxel extends Component {
         if (this.controller.isOutUI()) {
             const clickEndPos = e.touch.getLocation();
             const childList = this.node.children;
+
+            if (this.isUsingBrush) {
+                // 以32为边长
+                if (this.brushState === BrushType.Rect || this.brushState === BrushType.Ellipse) {
+                    const width = 320 / 32;
+                    while (this.tmpBrushBuffer.length) {
+                        const pos = this.tmpBrushBuffer.pop();
+                        const g = director.getScene().getChildByPath('mainUI/OutUI/Brush/usebrush/BrushMenu/DrawBrushGraphic').getComponent(Graphics);
+                        g.node.getParent().getChildByName('TempGraphic').getComponent(Graphics).clear();
+                        if (!this.brushBuffer[pos.y * 32 + pos.x]) {
+                            this.brushBuffer[pos.y * 32 + pos.x] = true;
+                            g.rect(pos.x * width + 0.5 - 160, pos.y * width + 0.5 - 160, width - 1, width - 1);
+                            g.fill();
+                        }
+                    }
+                }
+            }
             if (this.isMove) {
+
                 switch (this.editState) {
                     case EditState.MultiSelect:
                         const selectQuad: RectSize = {
@@ -763,7 +923,7 @@ export class EditVoxel extends Component {
                                 if (!this.selectInfo.selectNodeSet.has(childList[i])) {
                                     this.selectInfo.selectNodeSet.add(childList[i]);
                                     const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
-                                    mr.setMaterialInstance(matInstance, 0);
+                                    mr.setMaterialInstance(this.selectVoxelMat, 0);
                                     const pos = childList[i].position;
                                     this.selectInfo.selectCentroid.add(pos);
                                     this.tempOpRecord.DelPosSet.add(pos2id(pos));
@@ -789,13 +949,14 @@ export class EditVoxel extends Component {
                         }
                         this.selectInfo.selectCentroid.multiplyScalar(this.selectInfo.selectNodeSet.size);
                         for (let i = 0; i < this.activeEditVoxelNum; i++) {
-                            const ssPos = this.curCamera.worldToScreen(childList[i].worldPosition);
+                            const ev = childList[i];
+                            const ssPos = this.curCamera.worldToScreen(ev.worldPosition);
                             if (isPosInQuad(new Vec2(ssPos.x, ssPos.y), selectQuadD)) {
-                                if (this.selectInfo.selectNodeSet.has(childList[i])) {
-                                    this.selectInfo.selectCentroid.subtract(childList[i].position);
-                                    this.selectInfo.selectNodeSet.delete(childList[i]);
-                                    const mr = (childList[i].getComponent(MeshRenderer) as RenderableComponent);
-                                    mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                                if (this.selectInfo.selectNodeSet.has(ev)) {
+                                    this.selectInfo.selectCentroid.subtract(ev.position);
+                                    this.selectInfo.selectNodeSet.delete(ev);
+                                    const mr = (ev.getComponent(MeshRenderer) as RenderableComponent);
+                                    mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(ev)).mat, 0);
                                 }
                             }
                         }
@@ -829,6 +990,8 @@ export class EditVoxel extends Component {
 
             }
         }
+        
+        this.isColorMove = false;
     }
 
 
@@ -856,6 +1019,9 @@ export class EditVoxel extends Component {
                             this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                                 if (this.activeEditVoxelNum === childList.length) {
                                     const ev = this.controller.createVoxel();
+                                    const copyColorId = this.voxelColorRecord.get(chd);
+                                    this.color2Mat.get(copyColorId).vlist.add(ev);
+                                    this.voxelColorRecord.set(ev, copyColorId);
                                     this.node.addChild(ev);
                                 } else if (this.activeEditVoxelNum > childList.length) {
                                     console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
@@ -879,6 +1045,14 @@ export class EditVoxel extends Component {
                     case KeyCode.DELETE:    // 删除当前框选中的所有体素
                         this.activeEditVoxelNum -= this.selectInfo.selectNodeSet.size;
                         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                            const colorId = this.voxelColorRecord.get(chd);
+                            this.voxelColorRecord.delete(chd);
+                            this.color2Mat.get(colorId).vlist.delete(chd);
+                            if (this.color2Mat.get(colorId).vlist.size === 0) {
+                                this.color2Mat.get(colorId).mat.destroy();
+                                this.color2Mat.delete(colorId);
+                            }
+
                             this.voxelPosQuery.setData(chd.position.x, chd.position.y, chd.position.z, null);
                             this.node.removeChild(chd);
                             chd.destroy();
@@ -936,13 +1110,16 @@ export class EditVoxel extends Component {
                             if (this.voxelPosQuery.getData(chd.position.x, chd.position.y, chd.position.z) === null) {
                                 if (this.activeEditVoxelNum === childList.length) {
                                     const ev = this.controller.createVoxel();
+                                    const copyColorId = this.voxelColorRecord.get(chd);
+                                    this.color2Mat.get(copyColorId).vlist.add(ev);
+                                    this.voxelColorRecord.set(ev, copyColorId);
                                     this.node.addChild(ev);
                                 } else if (this.activeEditVoxelNum > childList.length) {
                                     console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
                                 }
                                 const ev = childList[this.activeEditVoxelNum++];
                                 const mr = ev.getComponent(MeshRenderer);
-                                mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                                mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(ev)).mat, 0);
                                 ev.setPosition(new Vec3(chd.position.x, chd.position.y, chd.position.z));
                                 ev.active = true;
                                 ev.setScale(1,1,1);
@@ -977,7 +1154,7 @@ export class EditVoxel extends Component {
                     case KeyCode.KEY_D:
                         this.selectInfo.selectNodeSet.forEach((chd: Node) => {
                             const mr = chd.getComponent(MeshRenderer);
-                            mr.setMaterialInstance(this.defaultVoxelMat, 0);
+                            mr.setMaterialInstance(this.color2Mat.get(this.voxelColorRecord.get(chd)).mat, 0);
                         });
                         this.resetSelectInfo();
                         this.editState = EditState.None;
@@ -1103,6 +1280,189 @@ export class EditVoxel extends Component {
         }
     }
 
+    public onColorSliderChange(slider: Slider, customEventData: string) {
+
+        if (this.controller.isOutUI()) {
+            const p = slider.progress;
+            const resColor = new Vec3();
+            if (p >= 0.0 && p < 0.17) {
+                Vec3.lerp(resColor, new Vec3(1, 0, 0), new Vec3(1, 0, 1), p / 0.17);
+            } else if (p < 0.34) {
+                Vec3.lerp(resColor, new Vec3(1, 0, 1), new Vec3(0, 0, 1), (p - 0.17) / 0.17);
+            } else if (p < 0.51) {
+                Vec3.lerp(resColor, new Vec3(0, 0, 1), new Vec3(0, 1, 1), (p - 0.34) / 0.17);
+            } else if (p < 0.68){
+                Vec3.lerp(resColor, new Vec3(0, 1, 1), new Vec3(0, 1, 0), (p - 0.51) / 0.17);
+            } else if (p < 0.85){
+                Vec3.lerp(resColor, new Vec3(0, 1, 0), new Vec3(1, 1, 0), (p - 0.68) / 0.17);
+            } else {
+                Vec3.lerp(resColor, new Vec3(1, 1, 0), new Vec3(1, 0, 0), (p - 0.85) / 0.15);
+            }
+            this.colorGradientPanel.getComponent(Sprite).color = new Color(resColor.x * 255, resColor.y * 255, resColor.z * 255, 255);
+            Vec3.lerp(resColor, new Vec3(0, 0, 0), Vec3.lerp(new Vec3(), new Vec3(1, 1, 1), new Vec3(resColor.x, resColor.y, resColor.z), this.colorUV.x), this.colorUV.y);
+                
+            this.colorResult.color = new Color(resColor.x * 255, resColor.y * 255, resColor.z * 255, 255);
+        }
+    }
+
+    public onChangeColorButtonClick() {
+        if (this.controller.isOutUI()) {
+            if (this.editState === EditState.None && this.selectInfo.selectNodeSet.size > 0) {
+                const colorId = this.colorResult.color.toHEX();
+                let newMat = new Material();
+                if (!this.color2Mat.has(colorId)) {
+                    newMat.initialize({
+                        // 通过 effect 名指定材质使用的着色器资源
+                        effectName: 'builtin-standard',
+                        defines: {
+                            USE_INSTANCING: true
+                        }
+                    });
+                    newMat.setProperty("mainColor", this.colorResult.color);
+                    this.color2Mat.set(colorId, {mat: newMat, vlist: new Set()});
+                } else {
+                    newMat = this.color2Mat.get(colorId).mat;
+                }
+                this.selectInfo.selectNodeSet.forEach((chd: Node) => {
+                    this.color2Mat.get(colorId).vlist.add(chd);
+                    this.voxelColorRecord.set(chd, colorId);
+                    const mr = chd.getComponent(MeshRenderer);
+                    mr.setMaterialInstance(newMat, 0);
+                });
+            }
+        }
+    }
+
+    public onVoxelBrushButtonClick(e: Event, brushType: string) {
+        // @ts-ignore
+        const brushMenu = (e.currentTarget as Node).getParent();
+        switch(brushType) {
+            case 'rect':
+                this.brushState = BrushType.Rect;
+                break;
+            case 'ellipse':
+                this.brushState = BrushType.Ellipse;
+                break;
+            case 'track':
+                this.brushState = BrushType.Track;
+                break;
+            case 'eraser':
+                this.brushState = BrushType.Eraser;
+                break;
+            case 'complete':
+                // break;
+            case 'quit':
+                brushMenu.getChildByName('DrawBrushGraphic').getComponent(Graphics).clear();
+                brushMenu.getComponent(Graphics).clear();
+                while(this.brushBuffer.length)
+                    this.brushBuffer.pop();
+                brushMenu.active = false;
+                this.isUsingBrush = false;
+                this.brushState = BrushType.None;
+                break;
+        }
+    }
+
+    public onUseBrushButtonClick(e: Event) {
+        // 这里是以边长为32的体素编写的
+        // @ts-ignore
+        const brushMenu = (e.currentTarget as Node).getChildByName('BrushMenu');
+        if (!brushMenu.active) {
+            brushMenu.active = true;
+            this.isUsingBrush = true;
+            this.brushState = BrushType.None;
+            this.brushBuffer = new Array(32 * 32).fill(false);
+            const brushMenug = brushMenu.getComponent(Graphics);
+            drawRoundRect(brushMenug, new Vec2(-20, 0), 40, 180, 5, true);
+            brushMenug.fillColor.fromHEX('CCCCCC');
+            brushMenug.fill();
+            drawRoundRect(brushMenug, new Vec2(140, 10), 340, 340, 10, true);
+            brushMenug.fillColor.fromHEX('8f8f8f');
+            brushMenug.fill();
+            brushMenug.moveTo(150, 0);
+            brushMenug.lineTo(470, 0);
+            brushMenug.lineTo(470, -320);
+            brushMenug.lineTo(150, -320);
+            brushMenug.lineTo(150, 0);
+            brushMenug.fillColor.fromHEX('FFFFFF');
+            brushMenug.fill();
+            let rowx = 160, coly = -10;
+            for (let i = 1; i < 32; i++, rowx += 10, coly -= 10) {
+                brushMenug.moveTo(150, coly);
+                brushMenug.lineTo(470, coly);
+                brushMenug.moveTo(rowx, 0);
+                brushMenug.lineTo(rowx, -320);
+            }
+            brushMenug.lineWidth = 1;
+            brushMenug.strokeColor.fromHEX('aaaaaa');
+            brushMenug.stroke();
+        }
+        
+    }
+
+    private calculateBrush(x: number, y: number, g: Graphics) {
+        // 这里以边长为32的体素
+        const width = 320 / 32;
+        const pos2screen = (v: number): number => {
+            return v * width + 0.5 - 160;
+        }
+        switch(this.brushState) {
+            case BrushType.Rect:
+                console.log()
+                g.clear();
+                while (this.tmpBrushBuffer.length)
+                    this.tmpBrushBuffer.pop();
+                const startx = Math.min(this.brushStartPos.x, x);
+                const endx = Math.max(this.brushStartPos.x, x);
+                const starty = Math.min(this.brushStartPos.y, y);
+                const endy = Math.max(this.brushStartPos.y, y);
+                
+                for (let px = startx; px <= endx; px += 1) {
+                    // if (!this.brushBuffer[starty * 32 + px]) {
+                    //     this.brushBuffer[starty * 32 + px] = true;
+                    g.rect(pos2screen(px), pos2screen(starty), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(px, starty));
+                    // }
+
+                    // if (!this.brushBuffer[endy * 32 + px]) {
+                    //     this.brushBuffer[endy * 32 + px] = true;
+                    g.rect(pos2screen(px), pos2screen(endy), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(px, endy));
+                    // }
+                }
+                for (let py = starty; py <= endy; py += 1) {
+                    // if (!this.brushBuffer[py * 32 + startx]) {
+                    //     this.brushBuffer[py * 32 + startx] = true;
+                    g.rect(pos2screen(startx), pos2screen(py), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(startx, py));
+                    // }
+
+                    // if (!this.brushBuffer[py * 32 + endx]) {
+                    //     this.brushBuffer[py * 32 + endx] = true;
+                    g.rect(pos2screen(endx), pos2screen(py), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(endx, py));
+                    // }
+                }
+                break;
+            case BrushType.Ellipse:
+                break;
+            case BrushType.Track:
+                console.log(x, y);
+                const dg = g.node.getParent().getChildByName('DrawBrushGraphic').getComponent(Graphics);
+                if (!this.brushBuffer[y * 32 + x]) {
+                    this.brushBuffer[y * 32 + x] = true;
+                    dg.rect(pos2screen(x), pos2screen(y), width - 1, width - 1);
+                    dg.fill();
+                }
+                break;
+            case BrushType.Eraser:
+                break;
+        }
+    }
 
     public onloadVoxel() {
         this.voxelRead.click();

@@ -16,7 +16,8 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(32, -32);
         this.backgroundGraphic.lineTo(-32, -32);
         this.backgroundGraphic.lineTo(-32, 15);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.nodeBoundingBox = {
             left: -34, 
             right: 34,
@@ -31,7 +32,8 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(32, 1);
         this.backgroundGraphic.lineTo(-32, 1);
         this.backgroundGraphic.lineTo(-32, 15);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.nameLabel.setPosition(0, 15);
         this.nameLabel.getComponent(Label).string = 'Constant';
         this.outputType = EditEmbeddingOutputType.Number;
@@ -43,7 +45,8 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(0, -15);
         this.backgroundGraphic.lineTo(-32, -15);
         this.backgroundGraphic.lineTo(-32, 0);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         this.outputNode.setPosition(32, -8);
 
         /**text input bg */
@@ -52,7 +55,8 @@ export class EditEmbeddingNodeNumber extends EditEmbeddingNodeBase {
         this.backgroundGraphic.lineTo(32, -32);
         this.backgroundGraphic.lineTo(-32, -32);
         this.backgroundGraphic.lineTo(-32, -16);
-        this.backgroundGraphic.fill();
+        // this.backgroundGraphic.fill();
+        this.backgroundGraphic.stroke();
         const cin = instantiate(this.EEGController.ConstantInputPrefab);
         cin.layer = this.node.layer;
         this.node.addChild(cin);
