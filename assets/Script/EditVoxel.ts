@@ -83,11 +83,11 @@ class VoxelData {
 }
 
 enum BrushType {
-    None = 0,
-    Track = 1,
-    Rect = 2,
-    Ellipse = 3,
-    Eraser = 4
+    None = 'None',
+    Track = 'Track',
+    Rect = 'Rectangle',
+    Ellipse = 'Ellipse',
+    Eraser = 'Eraser'
 }
 
 
@@ -212,7 +212,7 @@ export class EditVoxel extends Component {
     private isUsingBrush: boolean = false;
     private brushBuffer: Array<boolean> = new Array();
     private tmpBrushBuffer: Array<Vec2> = new Array();
-    private brushState: BrushType = 0;
+    private brushState: BrushType = BrushType.None;
     private brushStartPos: Vec2 = new Vec2();
     
 
@@ -864,7 +864,7 @@ export class EditVoxel extends Component {
                         }
                         
                     } else {
-
+                        
                     }
 
                     break;
@@ -1336,20 +1336,70 @@ export class EditVoxel extends Component {
     public onVoxelBrushButtonClick(e: Event, brushType: string) {
         // @ts-ignore
         const brushMenu = (e.currentTarget as Node).getParent();
+        console.log(this.brushState);
+        if (this.brushState != BrushType.None) {
+            brushMenu.getChildByName(this.brushState).getComponent(Sprite).color = (new Color()).fromHEX('AFAFAF6F');
+        }
         switch(brushType) {
-            case 'rect':
+            case 'Rectangle':{
                 this.brushState = BrushType.Rect;
+                brushMenu.getChildByName('Rectangle').getComponent(Sprite).color = (new Color()).fromHEX('4444446F');
                 break;
-            case 'ellipse':
+            }
+            case 'Ellipse':{
                 this.brushState = BrushType.Ellipse;
+                brushMenu.getChildByName('Ellipse').getComponent(Sprite).color = (new Color()).fromHEX('4444446F');
                 break;
-            case 'track':
+            }
+            case 'Track':{
                 this.brushState = BrushType.Track;
+                brushMenu.getChildByName('Track').getComponent(Sprite).color = (new Color()).fromHEX('4444446F');
                 break;
-            case 'eraser':
+            }
+            case 'Eraser':{
                 this.brushState = BrushType.Eraser;
+                brushMenu.getChildByName('Eraser').getComponent(Sprite).color = (new Color()).fromHEX('4444446F');
                 break;
+            }
             case 'complete':
+                // 这里是以边长为32的体素编写的
+                this.resetSelectInfo();
+                const childList = this.node.children;
+                for (let i = 0; i < 32; i++) {
+                    for (let j = 0; j < 32; j++) {
+                        if (this.brushBuffer[j * 32 + i]) {
+                            if (this.activeEditVoxelNum === childList.length) {
+                                const ev = this.controller.createVoxel();
+                                this.color2Mat.get('ffffff').vlist.add(ev);
+                                this.voxelColorRecord.set(ev, 'ffffff');
+                                this.node.addChild(ev);
+                            } else if (this.activeEditVoxelNum > childList.length) {
+                                console.error('EDIT记录的体素数量超过实际子节点体素数量！！');
+                            }
+                            const ev = childList[this.activeEditVoxelNum++];
+                            this.voxelPosQuery.setData(i - 16, j - 16, 31, ev);
+                            const mr = ev.getComponent(MeshRenderer);
+                            mr.setMaterialInstance(this.selectVoxelMat, 0);
+                            const pos = new Vec3(i - 16, j - 16, 31);
+                            ev.position = pos;
+                            ev.setScale(1,1,1);
+                            ev.active = true;
+                            // add to selectInfo
+                            this.selectInfo.selectNodeSet.add(ev);
+                            this.selectInfo.selectCentroid.add(pos);
+                            this.tempOpRecord.DelPosSet.add(pos2id(pos));
+                            this.voxelPosQuery.setData(pos.x, pos.y, pos.z, null);
+                            this.selectInfo.selectCubeSize.left = Math.min(this.selectInfo.selectCubeSize.left, pos.x);
+                            this.selectInfo.selectCubeSize.right = Math.max(this.selectInfo.selectCubeSize.right, pos.x);
+                            this.selectInfo.selectCubeSize.bottom = Math.min(this.selectInfo.selectCubeSize.bottom, pos.y);
+                            this.selectInfo.selectCubeSize.top = Math.max(this.selectInfo.selectCubeSize.top, pos.y);
+                            this.selectInfo.selectCubeSize.back = Math.min(this.selectInfo.selectCubeSize.back, pos.z);
+                            this.selectInfo.selectCubeSize.front = Math.max(this.selectInfo.selectCubeSize.front, pos.z);
+                        }
+                    }
+                }
+                
+                this.selectInfo.selectCentroid.multiplyScalar(1 / this.selectInfo.selectNodeSet.size);
                 // break;
             case 'quit':
                 brushMenu.getChildByName('DrawBrushGraphic').getComponent(Graphics).clear();
@@ -1407,8 +1457,7 @@ export class EditVoxel extends Component {
             return v * width + 0.5 - 160;
         }
         switch(this.brushState) {
-            case BrushType.Rect:
-                console.log()
+            case BrushType.Rect: {
                 g.clear();
                 while (this.tmpBrushBuffer.length)
                     this.tmpBrushBuffer.pop();
@@ -1418,39 +1467,64 @@ export class EditVoxel extends Component {
                 const endy = Math.max(this.brushStartPos.y, y);
                 
                 for (let px = startx; px <= endx; px += 1) {
-                    // if (!this.brushBuffer[starty * 32 + px]) {
-                    //     this.brushBuffer[starty * 32 + px] = true;
                     g.rect(pos2screen(px), pos2screen(starty), width - 1, width - 1);
                     g.fill();
                     this.tmpBrushBuffer.push(new Vec2(px, starty));
-                    // }
-
-                    // if (!this.brushBuffer[endy * 32 + px]) {
-                    //     this.brushBuffer[endy * 32 + px] = true;
                     g.rect(pos2screen(px), pos2screen(endy), width - 1, width - 1);
                     g.fill();
                     this.tmpBrushBuffer.push(new Vec2(px, endy));
                     // }
                 }
                 for (let py = starty; py <= endy; py += 1) {
-                    // if (!this.brushBuffer[py * 32 + startx]) {
-                    //     this.brushBuffer[py * 32 + startx] = true;
                     g.rect(pos2screen(startx), pos2screen(py), width - 1, width - 1);
                     g.fill();
                     this.tmpBrushBuffer.push(new Vec2(startx, py));
-                    // }
-
-                    // if (!this.brushBuffer[py * 32 + endx]) {
-                    //     this.brushBuffer[py * 32 + endx] = true;
                     g.rect(pos2screen(endx), pos2screen(py), width - 1, width - 1);
                     g.fill();
                     this.tmpBrushBuffer.push(new Vec2(endx, py));
-                    // }
                 }
                 break;
-            case BrushType.Ellipse:
+            }
+            case BrushType.Ellipse: {
+                g.clear();
+                while (this.tmpBrushBuffer.length)
+                    this.tmpBrushBuffer.pop();
+                const startx = Math.min(this.brushStartPos.x, x);
+                const endx = Math.max(this.brushStartPos.x, x);
+                const starty = Math.min(this.brushStartPos.y, y);
+                const endy = Math.max(this.brushStartPos.y, y);
+                const a = (endx - startx + 1) * 0.5;
+                const b = (endy - starty + 1) * 0.5;
+                const asquare = a * a;
+                const bsquare = b * b;
+                let midy = (starty + endy) * 0.5;
+                let midx = (startx + endx) * 0.5;
+            
+
+                for (let px = startx; px <= endx; px++) {
+                    const ex = px - midx;
+                    const py = Math.floor(Math.sqrt(bsquare - bsquare * ex * ex / asquare));
+                    g.rect(pos2screen(px), pos2screen(Math.floor(midy + py)), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(px, Math.floor(midy + py)));
+                    g.rect(pos2screen(px), pos2screen(Math.ceil(midy - py)), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(px, Math.ceil(midy - py)));
+                }
+
+                for (let py = starty; py <= endy; py++) {
+                    const ey = py - midy;
+                    const px = Math.floor(Math.sqrt(asquare - asquare * ey * ey / bsquare));
+                    g.rect(pos2screen(Math.floor(midx + px)), pos2screen(py), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(Math.floor(midx + px), py));
+                    g.rect(pos2screen(Math.ceil(midx - px)), pos2screen(py), width - 1, width - 1);
+                    g.fill();
+                    this.tmpBrushBuffer.push(new Vec2(Math.ceil(midx - px), py));
+                }
                 break;
-            case BrushType.Track:
+            }
+            case BrushType.Track: {
                 console.log(x, y);
                 const dg = g.node.getParent().getChildByName('DrawBrushGraphic').getComponent(Graphics);
                 if (!this.brushBuffer[y * 32 + x]) {
@@ -1459,8 +1533,24 @@ export class EditVoxel extends Component {
                     dg.fill();
                 }
                 break;
-            case BrushType.Eraser:
+            }
+            case BrushType.Eraser: {
+                const dg = g.node.getParent().getChildByName('DrawBrushGraphic').getComponent(Graphics);
+                if (this.brushBuffer[y * 32 + x]) {
+                    this.brushBuffer[y * 32 + x] = false;
+                    dg.clear();
+                    for (let i = 0; i < 32; i++) {
+                        for (let j = 0; j < 32; j++) {
+                            if (this.brushBuffer[j * 32 + i]) {
+
+                                dg.rect(pos2screen(i), pos2screen(j), width - 1, width - 1);
+                                dg.fill();
+                            }
+                        }
+                    }
+                }
                 break;
+            }
         }
     }
 
